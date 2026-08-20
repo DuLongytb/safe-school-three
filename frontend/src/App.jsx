@@ -147,33 +147,20 @@ function NotificationsPlaceholder() {
     }
   };
 
-<<<<<<< HEAD:src/App.jsx
   // Hàm xử lý khi bấm mở thông báo (Đã được bổ sung)
   const handleOpenNotification = async (item) => {
-    if (!item.id) return;
-=======
-  const handleOpenNotification = async (item) => {
     if (!item?.id) return;
->>>>>>> aba9863 (css):frontend/src/App.jsx
     try {
       if (item.read === false) {
         await updateDoc(doc(db, 'notifications', item.id), { read: true });
       }
-<<<<<<< HEAD:src/App.jsx
       if (item.targetUrl) {
         navigate(item.targetUrl);
       } else if (item.articleId) {
         navigate(`/articles/${item.articleId}`);
       }
     } catch (error) {
-      console.error('Lỗi cập nhật trạng thái thông báo:', error);
-=======
-      if (item.articleId) {
-        navigate(`/articles/${item.articleId}`);
-      }
-    } catch (error) {
       console.error('Lỗi mở thông báo:', error);
->>>>>>> aba9863 (css):frontend/src/App.jsx
     }
   };
 
@@ -188,7 +175,6 @@ function NotificationsPlaceholder() {
         return false;
       }
     }
-<<<<<<< HEAD:src/App.jsx
 
     // 2. Lọc theo trạng thái Đọc / Chưa đọc
     if (filterMode === 'unread' && item.read !== false) return false;
@@ -201,17 +187,6 @@ function NotificationsPlaceholder() {
       const messageMatch = item.message?.toLowerCase().includes(queryLower);
       return titleMatch || messageMatch;
     }
-
-=======
-    if (filterMode === 'unread' && item.read !== false) return false;
-    if (filterMode === 'read' && item.read === false) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const inTitle = item.title?.toLowerCase().includes(q);
-      const inMessage = item.message?.toLowerCase().includes(q);
-      if (!inTitle && !inMessage) return false;
-    }
->>>>>>> aba9863 (css):frontend/src/App.jsx
     return true;
   });
 
