@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import PushNotificationContainer from './components/Common/PushNotification';
 import ProtectedRoute from './components/Common/ProtectedRoute';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
@@ -17,6 +19,7 @@ import Login from './Pages/Login';
 import Register from './Pages/Register';
 import SOS from "./Pages/SOS";
 import Notifications from './Pages/Notifications';
+import NotificationSettings from './Pages/NotificationSettings';
 import Consultation from './Pages/Consultation';
 import Report from './Pages/Report';
 
@@ -45,6 +48,7 @@ function AppShell() {
 
   return (
     <>
+      <PushNotificationContainer />
       {!isNoHeader && <Header />}
 
       <main className="app-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -67,6 +71,7 @@ function AppShell() {
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/settings/notifications" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
           <Route path="/consultation" element={<ProtectedRoute><Consultation /></ProtectedRoute>} />
 
           {/* Protected Admin Routes */}
@@ -99,9 +104,11 @@ function AppShell() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppShell />
-      </BrowserRouter>
+      <NotificationProvider>
+        <BrowserRouter>
+          <AppShell />
+        </BrowserRouter>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

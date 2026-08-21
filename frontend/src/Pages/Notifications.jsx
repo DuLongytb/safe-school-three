@@ -262,11 +262,21 @@ export default function Notifications() {
   return (
     <div className="notifications-page">
       <div className="notifications-wrapper">
-        <header className="notifications-header">
-          <h1 className="notifications-title">🔔 Thông báo</h1>
-          <p className="notifications-subtitle">
-            Theo dõi các cập nhật mới nhất về đặt lịch tham vấn, bài viết và tài khoản của bạn.
-          </p>
+        <header className="notifications-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 className="notifications-title">🔔 Thông báo</h1>
+            <p className="notifications-subtitle">
+              Theo dõi các cập nhật mới nhất về đặt lịch tham vấn, bài viết và tài khoản của bạn.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="notifications-filter notifications-filter--active"
+            onClick={() => navigate('/settings/notifications')}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.6rem 1.2rem', whiteSpace: 'nowrap' }}
+          >
+            ⚙️ Cài đặt thông báo
+          </button>
         </header>
 
         <div className="notifications-stats">
