@@ -27,6 +27,7 @@ const ManageChat = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
 
   useEffect(() => {
@@ -45,7 +46,12 @@ const ManageChat = () => {
   }, [selectedRoomId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   }, [messages]);
 
   const handleCreateRoom = async (title) => {
@@ -289,7 +295,7 @@ const ManageChat = () => {
                 <span className="preview-badge">👁 Chế độ xem — không tham gia chat</span>
               </div>
 
-              <div className="preview-messages">
+              <div className="preview-messages" ref={messagesContainerRef}>
                 {messages.length === 0 ? (
                   <div className="preview-empty" style={{ padding: '20px' }}>
                     <p>Chưa có tin nhắn nào trong phòng này.</p>

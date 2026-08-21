@@ -80,10 +80,13 @@ function MessageArea({ selectedRoom, messages, messageText, setMessageText, send
   const [membersSearchQuery, setMembersSearchQuery] = useState('');
   const [roomMembers, setRoomMembers] = useState([]);
 
-  // Cuộn xuống cuối mỗi khi có tin nhắn mới hoặc đổi phòng
+  // Cuộn xuống cuối mỗi khi có tin nhắn mới hoặc đổi phòng (chỉ cuộn khung tin nhắn, không cuộn toàn trang)
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
     }
   }, [messages, selectedRoom?.id]);
 
@@ -686,7 +689,7 @@ function TeacherTab({ user, onToast }) {
         </div>
         <div className="teacher-room-badge">🔒 Riêng tư</div>
       </div>
-      <div className="chat-layout" style={{ height: 'calc(100vh - var(--header-height) - 240px)' }}>
+      <div className="chat-layout">
         <section className="chat-main" style={{ width: '100%' }}>
           <MessageArea
             selectedRoom={room || { id: TEACHER_ROOM_ID, title: 'Phòng Giáo Viên', createdByName: 'Hệ thống', participantIds: [user.uid] }}
