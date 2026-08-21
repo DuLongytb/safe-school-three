@@ -1,0 +1,246 @@
+/* PushNotification.css - Antigravity Right-to-Left Slide-In & 3D Stacking Toast */
+
+.push-notif-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Base Toast Item */
+.push-notif-card {
+  pointer-events: auto;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 1.15rem 1.25rem;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  user-select: none;
+  touch-action: pan-y;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease, box-shadow 0.35s ease;
+  animation: pushSlideInRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  overflow: hidden;
+}
+
+/* Keyframes: Entrance Slide-In from Right to Left */
+@keyframes pushSlideInRight {
+  0% {
+    transform: translateX(120%) scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Exit Animation */
+.push-notif-card.dismissing {
+  animation: pushSlideOutRight 0.3s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+}
+
+@keyframes pushSlideOutRight {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%) scale(0.8);
+    opacity: 0;
+  }
+}
+
+/* 3D Stacking Layering Offsets */
+.push-notif-card.stack-0 {
+  z-index: 100;
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.push-notif-card.stack-1 {
+  z-index: 99;
+  transform: translateY(14px) scale(0.95);
+  opacity: 0.88;
+  filter: brightness(0.9);
+}
+
+.push-notif-card.stack-2 {
+  z-index: 98;
+  transform: translateY(28px) scale(0.9);
+  opacity: 0.7;
+  filter: brightness(0.8);
+}
+
+.push-notif-card.stack-3 {
+  z-index: 97;
+  transform: translateY(40px) scale(0.85);
+  opacity: 0.4;
+  filter: brightness(0.7);
+}
+
+/* Hovering brings current stack item to top focus */
+.push-notif-card:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  opacity: 1 !important;
+  filter: brightness(1) !important;
+  z-index: 101 !important;
+}
+
+/* Category Glow Border & Lighting Themes */
+.push-notif-card.category-sos {
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 25px rgba(239, 68, 68, 0.5), 0 10px 30px rgba(0, 0, 0, 0.4);
+  animation: pushSlideInRight 0.45s cubic-bezier(0.16, 1, 0.3, 1), sosGlowPulse 1.8s infinite alternate;
+}
+
+@keyframes sosGlowPulse {
+  0% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4), 0 10px 30px rgba(0, 0, 0, 0.4);
+    border-color: #ef4444;
+  }
+  100% {
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.8), 0 10px 30px rgba(0, 0, 0, 0.4);
+    border-color: #f87171;
+  }
+}
+
+.push-notif-card.category-critical {
+  border: 2px solid #f97316;
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.4), 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.push-notif-card.category-chat {
+  border: 1px solid #06b6d4;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.35), 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.push-notif-card.category-system {
+  border: 1px solid #6366f1;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.35), 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.push-notif-card.category-normal {
+  border: 1px solid #3b82f6;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3), 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Card Content Layout */
+.push-notif-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.push-notif-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+}
+
+.category-sos .push-notif-icon-box {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fecaca;
+}
+
+.category-chat .push-notif-icon-box {
+  background: rgba(6, 182, 212, 0.25);
+  color: #cffaff;
+}
+
+.push-notif-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.push-notif-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.push-notif-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0.5rem;
+}
+
+.push-notif-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  text-transform: uppercase;
+}
+
+.push-notif-message {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+  margin-top: 0.2rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Close Dismiss Button */
+.push-notif-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease, background 0.2s ease;
+  line-height: 1;
+}
+
+.push-notif-close-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Progress bar timer */
+.push-notif-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 0 0 16px 16px;
+}
+
+.category-sos .push-notif-progress {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
