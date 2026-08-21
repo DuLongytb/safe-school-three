@@ -79,6 +79,41 @@ export const getArticlesService = async ({ search = '', category = '', sortBy = 
 };
 
 /**
+ * Fetch featured articles (isFeatured === true) decided by Admin
+ */
+export const getFeaturedArticlesService = async (limitCount = 6) => {
+  try {
+    const articlesRef = collection(db, ARTICLES_COLLECTION);
+    const q = query(articlesRef, where('isDeleted', '!=', true));
+    const querySnapshot = await getDocs(q);
+
+    let featuredArticles = querySnapshot.docs
+      .map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
+          featuredAt: data.featuredAt?.toDate ? data.featuredAt.toDate().toISOString() : data.featuredAt || data.createdAt || new Date().toISOString(),
+        };
+      })
+      .filter(a => Boolean(a.isFeatured) && a.status === 'approved' && (a.visibility === 'public' || !a.visibility));
+
+    // Sort by featuredAt desc, fallback to createdAt desc
+    featuredArticles.sort((a, b) => new Date(b.featuredAt || b.createdAt) - new Date(a.featuredAt || a.createdAt));
+
+    if (limitCount && limitCount > 0) {
+      featuredArticles = featuredArticles.slice(0, limitCount);
+    }
+
+    return featuredArticles;
+  } catch (error) {
+    console.error('Error in getFeaturedArticlesService:', error);
+    return [];
+  }
+};
+
+/**
  * Fetch single article by ID (Does NOT increment view count automatically)
  */
 export const getArticleByIdService = async (id) => {
@@ -122,11 +157,19 @@ export const incrementArticleViewService = async (id) => {
   }
 };
 
+import { analyzeContent } from './moderationService';
+
 /**
  * Create a new article — always status: 'pending', awaiting moderation
  */
 export const createArticleService = async (articleData, user) => {
   try {
+    const moderationAnalysis = analyzeContent(
+      articleData.title || '',
+      articleData.summary || '',
+      articleData.content || ''
+    );
+
     const newArticle = {
       title: articleData.title || '',
       summary: articleData.summary || '',
@@ -137,7 +180,7 @@ export const createArticleService = async (articleData, user) => {
       visibility: articleData.visibility || 'public',
       // All articles start as pending — moderation required regardless of role
       status: 'pending',
-      authorId: user?.uid || 'anonymous',
+      authorId: user?.uid || null,
       authorName: user?.displayName || user?.email || 'Tác giả Safe School',
       authorAvatar: user?.avatarUrl || '',
       views: 0,
@@ -145,6 +188,16 @@ export const createArticleService = async (articleData, user) => {
       likedBy: [],
       favoritesCount: 0,
       isDeleted: false,
+      moderation: {
+        status: moderationAnalysis.status, // 'normal' | 'review_required'
+        flags: moderationAnalysis.flags,
+        flagDetails: moderationAnalysis.flagDetails,
+        educationalContextDetected: moderationAnalysis.educationalContextDetected,
+        confidence: moderationAnalysis.confidence,
+        reviewedBy: null,
+        reviewedAt: null,
+        moderationDecision: null,
+      },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -164,6 +217,12 @@ export const createArticleService = async (articleData, user) => {
 export const updateArticleService = async (id, articleData) => {
   try {
     const docRef = doc(db, ARTICLES_COLLECTION, id);
+    const moderationAnalysis = analyzeContent(
+      articleData.title || '',
+      articleData.summary || '',
+      articleData.content || ''
+    );
+
     const updatePayload = {
       title: articleData.title,
       summary: articleData.summary,
@@ -173,6 +232,16 @@ export const updateArticleService = async (id, articleData) => {
       tags: articleData.tags || [],
       visibility: articleData.visibility || 'public',
       status: articleData.status || 'pending',
+      moderation: {
+        status: moderationAnalysis.status,
+        flags: moderationAnalysis.flags,
+        flagDetails: moderationAnalysis.flagDetails,
+        educationalContextDetected: moderationAnalysis.educationalContextDetected,
+        confidence: moderationAnalysis.confidence,
+        reviewedBy: null,
+        reviewedAt: null,
+        moderationDecision: null,
+      },
       updatedAt: serverTimestamp(),
     };
 

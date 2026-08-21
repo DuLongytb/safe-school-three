@@ -11,7 +11,6 @@ import { db } from './firebase/config';
 import Home from './Pages/Home';
 import News from './Pages/News';
 import CreatePost from './Pages/CreatePost';
-import Report from './Pages/Report';
 import Profile from './Pages/Profile';
 import Chat from './Pages/Chat';
 import Login from './Pages/Login';
@@ -19,6 +18,7 @@ import Register from './Pages/Register';
 import SOS from "./Pages/SOS";
 import Notifications from './Pages/Notifications';
 import Consultation from './Pages/Consultation';
+import Report from './Pages/Report';
 
 // Admin Layout & Pages
 import AdminLayout from './components/Layout/AdminLayout';
@@ -33,6 +33,11 @@ const NO_CHROME_ROUTES = ['/register', '/login'];
 
 function AppShell() {
   const { pathname } = useLocation();
+
+  // Tự động cuộn lên đầu trang khi điều hướng sang trang mới
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
 
   const isNoChrome = NO_CHROME_ROUTES.includes(pathname) || pathname.startsWith('/admin');
 
@@ -56,6 +61,7 @@ function AppShell() {
           <Route path="/articles/create" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
           <Route path="/articles/edit/:id" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Report /></ProtectedRoute>} />
+          <Route path="/report" element={<ProtectedRoute><Report /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
@@ -73,6 +79,7 @@ function AppShell() {
             <Route index element={<Dashboard />} />
             <Route path="users" element={<ManageUsers />} />
             <Route path="posts" element={<ManagePosts />} />
+            <Route path="reports-sos" element={<ManageReports sosModeOnly={true} />} />
             <Route path="reports" element={<ManageReports />} />
             <Route path="chat" element={<ManageChat />} />
           </Route>

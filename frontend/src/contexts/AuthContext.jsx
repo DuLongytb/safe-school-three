@@ -11,6 +11,16 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Guest session: trạng thái frontend-only, không có Firebase UID, không lưu Firestore
+    const [isGuest, setIsGuest] = useState(
+        () => sessionStorage.getItem('safeschool_guest_session') === 'true'
+    );
+
+    // Gọi từ Login khi người dùng chọn “Tiếp tục với tư cách khách”
+    const enterGuestMode = () => {
+        sessionStorage.setItem('safeschool_guest_session', 'true');
+        setIsGuest(true);
+    };
 
     useEffect(() => {
         let unsubscribeSnapshot = null;
@@ -62,6 +72,9 @@ export const AuthProvider = ({ children }) => {
             currentFirebaseUser = firebaseUser;
 
             if (firebaseUser) {
+                // User Firebase thật đăng nhập — xóa guest session
+                sessionStorage.removeItem('safeschool_guest_session');
+                setIsGuest(false);
                 try {
                     const userDocRef = doc(db, 'users', firebaseUser.uid);
 
@@ -79,16 +92,26 @@ export const AuthProvider = ({ children }) => {
 
                         if (userDoc.exists()) {
                             const userData = userDoc.data();
+                            const isAnonymousMode = Boolean(userData?.is_anonymous);
+                            // realRole luôn là role thật từ Firestore, không bao giờ là 'anonymous'
+                            const realRole = (userData?.role && userData.role !== 'anonymous') ? userData.role : 'student';
+                            // Khi Anonymous mode: role hiển thị = 'anonymous'; khi User mode: role thật
+                            const effectiveRole = isAnonymousMode ? 'anonymous' : realRole;
+                            // Khi Anonymous mode: dùng tên ngẫu nhiên đã lưu; khi User mode: tên thật
+                            const effectiveDisplayName = isAnonymousMode
+                                ? (userData?.anonymousDisplayName || 'Người dùng ẩn danh')
+                                : (userData?.displayName || userData?.DisplayName || firebaseUser.displayName || 'User');
                             setUser({
                                 uid: firebaseUser.uid,
                                 email: firebaseUser.email,
-                                displayName: userData?.displayName || userData?.DisplayName || firebaseUser.displayName || 'User',
+                                displayName: effectiveDisplayName,
                                 avatarUrl: userData?.avatarUrl || firebaseUser.photoURL || '',
-                                role: userData?.role || 'student',
+                                role: effectiveRole,
+                                realRole: realRole,
                                 isOnline: userData?.is_Online || false,
                                 isActive: userData?.is_active || true,
                                 emailVerified: firebaseUser.emailVerified || false,
-                                isAnonymous: userData?.is_anonymous || false,
+                                isAnonymous: isAnonymousMode,
                                 lastLogin: userData?.lastLogin || null,
                                 notificationSettings: {
                                     ...defaultNotifSettings,
@@ -102,6 +125,7 @@ export const AuthProvider = ({ children }) => {
                                 displayName: firebaseUser.displayName || 'User',
                                 avatarUrl: firebaseUser.photoURL || '',
                                 role: 'student',
+                                realRole: 'student',
                                 isAnonymous: false,
                                 notificationSettings: defaultNotifSettings,
                             });
@@ -115,6 +139,7 @@ export const AuthProvider = ({ children }) => {
                             displayName: firebaseUser.displayName || 'User',
                             avatarUrl: firebaseUser.photoURL || '',
                             role: 'student',
+                            realRole: 'student',
                             isAnonymous: false,
                             notificationSettings: defaultNotifSettings,
                         });
@@ -130,6 +155,7 @@ export const AuthProvider = ({ children }) => {
                         displayName: firebaseUser.displayName || 'User',
                         avatarUrl: firebaseUser.photoURL || '',
                         role: 'student',
+                        realRole: 'student',
                         isAnonymous: false,
                     });
                     setLoading(false);
@@ -142,6 +168,9 @@ export const AuthProvider = ({ children }) => {
                 await updatePresence(currentFirebaseUser, false);
                 currentFirebaseUser = null;
                 setUser(null);
+                // Đăng xuất khỏi tài khoản thật — xóa guest session (user quáy lại trang đăng nhập)
+                sessionStorage.removeItem('safeschool_guest_session');
+                setIsGuest(false);
                 setLoading(false);
             }
         });
@@ -164,7 +193,7 @@ export const AuthProvider = ({ children }) => {
         };
     }, []);
 
-    const value = { user, loading };
+    const value = { user, loading, isGuest, enterGuestMode };
 
     return (
         <AuthContext.Provider value={value}>

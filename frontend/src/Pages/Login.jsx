@@ -6,11 +6,11 @@ import {
     browserSessionPersistence,
     signInWithEmailAndPassword,
     signInWithPopup,
-    signInAnonymously,
 } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import styles from './Auth.module.css';
 
 const getFirebaseErrorMessage = (code) => {
@@ -36,8 +36,9 @@ const Login = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
-    const [anonymousLoading, setAnonymousLoading] = useState(false);
+
     const navigate = useNavigate();
+    const { enterGuestMode } = useAuth();
 
     const applyPersistence = () => setPersistence(
         auth,
@@ -123,7 +124,7 @@ const Login = () => {
                     lastLogin: new Date().toISOString(),
                 });
             }
-            
+
             navigate('/');
         } catch (err) {
             setError(getFirebaseErrorMessage(err.code));
@@ -132,38 +133,10 @@ const Login = () => {
         }
     };
 
-    const handleAnonymousLogin = async () => {
-        setAnonymousLoading(true);
-        setError('');
-
-        try {
-            // Tài khoản khách chỉ tồn tại trong phiên trình duyệt hiện tại.
-            await setPersistence(auth, browserSessionPersistence);
-            const result = await signInAnonymously(auth);
-            const user = result.user;
-            const now = new Date().toISOString();
-            const userDocRef = doc(db, 'users', user.uid);
-
-            await setDoc(userDocRef, {
-                uid: user.uid,
-                displayName: 'Khách ẩn danh',
-                email: null,
-                role: 'anonymous',
-                avatarUrl: '',
-                is_Online: true,
-                is_active: true,
-                emailVerified: false,
-                is_anonymous: true,
-                createdAt: now,
-                lastLogin: now,
-            }, { merge: true });
-
-            navigate('/');
-        } catch (err) {
-            setError(getFirebaseErrorMessage(err.code));
-        } finally {
-            setAnonymousLoading(false);
-        }
+    const handleContinueAsGuest = () => {
+        // Guest: chỉ tạo trạng thái frontend, không tạo Firebase account, không tạo UID, không ghi Firestore
+        enterGuestMode();
+        navigate('/');
     };
 
     return (
@@ -258,11 +231,11 @@ const Login = () => {
                 <button
                     type="button"
                     className={styles.anonymousButton}
-                    onClick={handleAnonymousLogin}
-                    disabled={loading || googleLoading || anonymousLoading}
+                    onClick={handleContinueAsGuest}
+                    disabled={loading || googleLoading}
                 >
                     <span aria-hidden="true">👤</span>
-                    {anonymousLoading ? 'Đang tạo phiên khách...' : 'Tiếp tục với tư cách khách'}
+                    Tiếp tục với tư cách khách
                 </button>
 
 
