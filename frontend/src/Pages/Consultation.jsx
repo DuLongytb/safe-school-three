@@ -66,7 +66,7 @@ export default function Consultation() {
 
   // Expert management state
   const [allConsultations, setAllConsultations] = useState([]);
-  const isExpertOrAdmin = user?.role === 'expert' || user?.role === 'admin';
+  const isExpertOrAdmin = ['counselor', 'counseler', 'expert', 'psychologist', 'admin'].includes(user?.role);
 
   // Modal Từ chối (Dành cho Chuyên viên)
   const [rejectModalItem, setRejectModalItem] = useState(null);
@@ -168,10 +168,10 @@ export default function Consultation() {
     setBannerMessage(null);
 
     try {
-      let chosenExpertName = 'Tất cả chuyên viên';
+      let chosenExpertName = 'Tất cả tham vấn viên';
       if (selectedExpertId) {
         const expObj = expertsList.find((e) => e.id === selectedExpertId);
-        if (expObj) chosenExpertName = expObj.displayName || expObj.email || 'Chuyên viên';
+        if (expObj) chosenExpertName = expObj.displayName || expObj.email || 'Tham vấn viên';
       }
 
       await createConsultationBooking({
@@ -334,18 +334,18 @@ export default function Consultation() {
                   />
                 </div>
 
-                {/* Chọn chuyên viên */}
+                {/* Chọn tham vấn viên */}
                 <div className="form-group">
-                  <label className="form-label">👨‍⚕️ Chuyên viên tư vấn</label>
+                  <label className="form-label">👨‍⚕️ Tham vấn viên</label>
                   <select
                     className="form-select"
                     value={selectedExpertId}
                     onChange={(e) => setSelectedExpertId(e.target.value)}
                   >
-                    <option value="">-- Tất cả chuyên viên (Hệ thống tự phân công) --</option>
+                    <option value="">-- Tất cả tham vấn viên (Hệ thống tự phân công) --</option>
                     {expertsList.map((exp) => (
                       <option key={exp.id} value={exp.id}>
-                        {exp.displayName || exp.email} {exp.role === 'admin' ? '(Admin)' : '(Chuyên viên)'}
+                        {exp.displayName || exp.email} (Tham vấn viên)
                       </option>
                     ))}
                   </select>

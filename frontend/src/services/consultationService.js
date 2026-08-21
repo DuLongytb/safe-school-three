@@ -17,19 +17,19 @@ import { createNotification } from './notificationService';
 export const CONSULTATIONS_COLLECTION = 'consultations';
 
 /**
- * Lấy danh sách chuyên viên (role = 'expert' hoặc 'admin')
+ * Lấy danh sách tham vấn viên (role = 'counselor', 'counseler', 'psychologist', 'expert' - không lấy 'admin')
  */
 export async function fetchExpertsList() {
   try {
     const usersRef = collection(db, 'users');
-    const qExpert = query(usersRef, where('role', 'in', ['expert', 'admin']));
+    const qExpert = query(usersRef, where('role', 'in', ['counselor', 'counseler', 'psychologist', 'expert']));
     const snap = await getDocs(qExpert);
     return snap.docs.map((docSnap) => ({
       id: docSnap.id,
       ...docSnap.data()
     }));
   } catch (error) {
-    console.error('Lỗi khi lấy danh sách chuyên viên:', error);
+    console.error('Lỗi khi lấy danh sách tham vấn viên:', error);
     return [];
   }
 }
