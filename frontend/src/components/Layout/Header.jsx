@@ -188,6 +188,9 @@ export default function Header() {
                   <button className="dropdown-item" onClick={handleFavoritesClick}>
                     ❤️ Bài viết yêu thích
                   </button>
+                  <button className="dropdown-item" onClick={() => { setIsDropdownOpen(false); navigate('/settings/notifications'); }}>
+                    ⚙️ Cài đặt thông báo
+                  </button>
                   <button className="dropdown-item" onClick={handleToggleAnonymous}>
                     👤 {user.isAnonymous ? 'Tắt chế độ ẩn danh' : 'Bật chế độ ẩn danh'}
                   </button>

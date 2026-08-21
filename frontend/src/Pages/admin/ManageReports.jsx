@@ -411,23 +411,27 @@ const ManageReports = ({ sosModeOnly = false }) => {
         </div>
       )}
 
-      {/* Reports Table */}
+      {/* Reports Table with Responsive Horizontal Scroll */}
       {!loading && (
         <div
+          className="reports-table-scroll-wrapper"
           style={{
             backgroundColor: '#ffffff',
             borderRadius: '12px',
             border: '1px solid #e2e8f0',
-            overflow: 'hidden',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+            width: '100%',
           }}
         >
           <table
             style={{
               width: '100%',
+              minWidth: '1250px',
               borderCollapse: 'collapse',
               textAlign: 'left',
-              fontSize: '0.9rem',
+              fontSize: '0.875rem',
             }}
           >
             <thead>
@@ -437,23 +441,29 @@ const ManageReports = ({ sosModeOnly = false }) => {
                   borderBottom: '1px solid #e2e8f0',
                   color: '#475569',
                   fontWeight: '600',
+                  fontSize: '0.825rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.03em',
                 }}
               >
-                <th style={{ padding: '14px 18px' }}>Mã & Tiêu Đề Báo Cáo</th>
-                <th style={{ padding: '14px 18px' }}>Người Gửi / Vị Trí</th>
-                <th style={{ padding: '14px 18px' }}>Danh Mục</th>
-                <th style={{ padding: '14px 18px' }}>Thời Gian</th>
-                <th style={{ padding: '14px 18px' }}>Mức Độ</th>
-                <th style={{ padding: '14px 18px' }}>Trạng Thái</th>
-                <th style={{ padding: '14px 18px', textAlign: 'right' }}>Thao Tác</th>
+                <th style={{ padding: '14px 16px', width: '100px' }}>Mã ID</th>
+                <th style={{ padding: '14px 16px', minWidth: '160px' }}>Người gửi</th>
+                <th style={{ padding: '14px 16px', minWidth: '140px' }}>Loại báo cáo</th>
+                <th style={{ padding: '14px 16px', minWidth: '130px' }}>Mức độ ưu tiên</th>
+                <th style={{ padding: '14px 16px', minWidth: '220px' }}>Mô tả chi tiết</th>
+                <th style={{ padding: '14px 16px', minWidth: '130px' }}>Địa điểm</th>
+                <th style={{ padding: '14px 16px', minWidth: '140px' }}>Ngày tạo</th>
+                <th style={{ padding: '14px 16px', minWidth: '140px' }}>Người xử lý</th>
+                <th style={{ padding: '14px 16px', minWidth: '130px' }}>Trạng thái</th>
+                <th style={{ padding: '14px 16px', minWidth: '140px', textAlign: 'right' }}>Hành động</th>
               </tr>
             </thead>
             <tbody>
               {paginatedReports.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
-                    style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}
+                    colSpan={10}
+                    style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}
                   >
                     Không có báo cáo nào phù hợp với bộ lọc hiện tại.
                   </td>
@@ -473,89 +483,109 @@ const ManageReports = ({ sosModeOnly = false }) => {
                         transition: 'background-color 0.15s',
                       }}
                     >
-                      {/* Code & Title */}
-                      <td style={{ padding: '14px 18px', maxWidth: '280px' }}>
+                      {/* ID */}
+                      <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontSize: '0.8rem', color: '#64748b' }}>
+                        #{r.id.substring(0, 8)}
+                      </td>
+
+                      {/* Sender */}
+                      <td style={{ padding: '14px 16px', color: '#334155' }}>
+                        <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>
+                          {r.sender}
+                        </div>
+                        {r.isAnonymous && (
+                          <span
+                            style={{
+                              fontSize: '0.725rem',
+                              backgroundColor: '#e2e8f0',
+                              color: '#475569',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              display: 'inline-block',
+                              marginTop: '2px',
+                            }}
+                          >
+                            🕵️ Ẩn danh
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Category */}
+                      <td style={{ padding: '14px 16px', color: '#475569' }}>
+                        <span
+                          style={{
+                            backgroundColor: '#f1f5f9',
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            fontSize: '0.8rem',
+                            fontWeight: '500',
+                          }}
+                        >
+                          {r.categoryLabel || r.category}
+                        </span>
+                      </td>
+
+                      {/* Priority */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <span
+                          style={{
+                            backgroundColor: priorityConf.bg,
+                            color: priorityConf.color,
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '0.78rem',
+                            fontWeight: '700',
+                            letterSpacing: isSOS ? '0.5px' : 'normal',
+                            display: 'inline-block',
+                          }}
+                        >
+                          {priorityConf.label}
+                        </span>
+                      </td>
+
+                      {/* Description & Title */}
+                      <td style={{ padding: '14px 16px', maxWidth: '240px' }}>
                         <div
                           style={{
                             fontWeight: '600',
                             color: '#0f172a',
-                            fontSize: '0.95rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
+                            fontSize: '0.875rem',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
                           }}
+                          title={r.title}
                         >
                           {r.title}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '0.75rem',
-                            color: '#64748b',
-                            fontFamily: 'monospace',
-                            marginTop: '2px',
-                          }}
-                        >
-                          #{r.id.substring(0, 8)}
                         </div>
                         {r.description && (
                           <div
                             style={{
                               fontSize: '0.8rem',
                               color: '#64748b',
-                              marginTop: '3px',
+                              marginTop: '2px',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                             }}
+                            title={r.description}
                           >
                             {r.description}
                           </div>
                         )}
                       </td>
 
-                      {/* Sender / Location */}
-                      <td style={{ padding: '14px 18px', color: '#334155' }}>
-                        <div style={{ fontWeight: '500' }}>
-                          {r.sender}
-                          {r.isAnonymous && (
-                            <span
-                              style={{
-                                marginLeft: '6px',
-                                fontSize: '0.75rem',
-                                backgroundColor: '#e2e8f0',
-                                color: '#475569',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                              }}
-                            >
-                              🕵️ Ẩn danh
-                            </span>
-                          )}
-                        </div>
-                        {r.location && (
-                          <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
-                            📍 {r.location}
-                          </div>
+                      {/* Location */}
+                      <td style={{ padding: '14px 16px', color: '#475569', fontSize: '0.85rem' }}>
+                        {r.location ? (
+                          <span>📍 {r.location}</span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', italic: 'true' }}>—</span>
                         )}
                       </td>
 
-                      {/* Category */}
-                      <td style={{ padding: '14px 18px', color: '#475569' }}>
-                        <span
-                          style={{
-                            backgroundColor: '#f1f5f9',
-                            padding: '3px 8px',
-                            borderRadius: '6px',
-                            fontSize: '0.8rem',
-                            fontWeight: '500',
-                          }}
-                        >
-                          {r.categoryLabel}
-                        </span>
-                      </td>
-
-                      {/* Time */}
-                      <td style={{ padding: '14px 18px', color: '#64748b', fontSize: '0.85rem' }}>
+                      {/* Created Date */}
+                      <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '0.825rem' }}>
                         <div>{formatDate(r.createdAt)}</div>
                         <div
                           style={{
@@ -569,32 +599,24 @@ const ManageReports = ({ sosModeOnly = false }) => {
                         </div>
                       </td>
 
-                      {/* Priority */}
-                      <td style={{ padding: '14px 18px' }}>
-                        <span
-                          style={{
-                            backgroundColor: priorityConf.bg,
-                            color: priorityConf.color,
-                            padding: '3px 10px',
-                            borderRadius: '12px',
-                            fontSize: '0.78rem',
-                            fontWeight: '700',
-                            letterSpacing: isSOS ? '0.5px' : 'normal',
-                            animation: isSOS ? 'pulseBadge 1.5s infinite' : 'none',
-                            display: 'inline-block',
-                          }}
-                        >
-                          {priorityConf.label}
-                        </span>
+                      {/* Assigned To */}
+                      <td style={{ padding: '14px 16px', color: '#334155', fontSize: '0.85rem' }}>
+                        {r.assignedToName ? (
+                          <span style={{ fontWeight: '600', color: '#1e293b' }}>
+                            👤 {r.assignedToName}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Chưa phân công</span>
+                        )}
                       </td>
 
                       {/* Status */}
-                      <td style={{ padding: '14px 18px' }}>
+                      <td style={{ padding: '14px 16px' }}>
                         <span
                           style={{
                             backgroundColor: statusConf.bg,
                             color: statusConf.color,
-                            padding: '4px 12px',
+                            padding: '4px 10px',
                             borderRadius: '12px',
                             fontSize: '0.8rem',
                             fontWeight: '600',
@@ -603,25 +625,14 @@ const ManageReports = ({ sosModeOnly = false }) => {
                         >
                           {statusConf.label}
                         </span>
-                        {r.assignedToName && (
-                          <div
-                            style={{
-                              fontSize: '0.75rem',
-                              color: '#64748b',
-                              marginTop: '4px',
-                            }}
-                          >
-                            👤 {r.assignedToName}
-                          </div>
-                        )}
                       </td>
 
                       {/* Actions */}
-                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                         <div
                           style={{
                             display: 'flex',
-                            gap: '8px',
+                            gap: '6px',
                             justifyContent: 'flex-end',
                             alignItems: 'center',
                           }}
@@ -629,21 +640,22 @@ const ManageReports = ({ sosModeOnly = false }) => {
                           <button
                             type="button"
                             onClick={() => handleOpenDetailModal(r)}
+                            title="Xem chi tiết & Phân công xử lý"
                             style={{
-                              padding: '6px 12px',
+                              padding: '6px 10px',
                               borderRadius: '6px',
                               border: 'none',
                               backgroundColor: '#2563eb',
                               color: '#ffffff',
                               fontWeight: '600',
-                              fontSize: '0.825rem',
+                              fontSize: '0.8rem',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '4px',
                             }}
                           >
-                            <span>👁</span> Xem & Xử lý
+                            <span>👁</span> Chi tiết
                           </button>
 
                           <button
@@ -651,12 +663,12 @@ const ManageReports = ({ sosModeOnly = false }) => {
                             onClick={() => handleDeleteReport(r)}
                             title="Xóa báo cáo"
                             style={{
-                              padding: '6px 10px',
+                              padding: '6px 9px',
                               borderRadius: '6px',
                               border: 'none',
                               backgroundColor: '#fee2e2',
                               color: '#dc2626',
-                              fontSize: '0.825rem',
+                              fontSize: '0.8rem',
                               cursor: 'pointer',
                             }}
                           >
