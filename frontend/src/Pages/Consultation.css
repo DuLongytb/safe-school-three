@@ -1,0 +1,371 @@
+.consultation-page {
+  padding: calc(var(--header-height) + 40px) 24px 80px;
+  min-height: 85vh;
+  background-color: var(--primary-bg, #f8fafc);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+}
+
+.consultation-wrapper {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* Header */
+.consultation-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.consultation-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #1e3c72;
+  margin: 0 0 12px;
+  letter-spacing: -0.02em;
+}
+
+.consultation-subtitle {
+  color: #64748b;
+  font-size: 1.05rem;
+  max-width: 620px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Tabs Nav */
+.consultation-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 4px;
+}
+
+.consultation-tab-btn {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.consultation-tab-btn:hover {
+  color: #2563eb;
+}
+
+.consultation-tab-btn.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* Card Container */
+.consultation-card {
+  background-color: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e2e8f0;
+  padding: 32px;
+  margin-bottom: 30px;
+}
+
+/* Form layout */
+.booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-group-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-label .required {
+  color: #dc2626;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+/* Time Slots Grid */
+.time-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.time-slot-pill {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background-color: #f8fafc;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.time-slot-pill:hover {
+  border-color: #93c5fd;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+.time-slot-pill.selected {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+}
+
+/* Submit button */
+.btn-submit-booking {
+  padding: 14px 28px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn-submit-booking:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+}
+
+.btn-submit-booking:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Status Banner */
+.consultation-banner {
+  padding: 14px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.consultation-banner.success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.consultation-banner.error {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* History & List view */
+.consultation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.consultation-item-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.consultation-item-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.consultation-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.consultation-item-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.consultation-item-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background-color: #f8fafc;
+  border-radius: 12px;
+}
+
+.info-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-label {
+  font-size: 0.78125rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.info-value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.consultation-notes-box {
+  background-color: #fffbeb;
+  border: 1px solid #fef3c7;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  color: #92400e;
+  margin-bottom: 12px;
+}
+
+.consultation-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.btn-cancel-booking {
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cancel-booking:hover {
+  background-color: #fecaca;
+}
+
+.btn-open-chat {
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-open-chat:hover {
+  background-color: #dbeafe;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: #64748b;
+}
+
+.empty-state p {
+  margin: 8px 0 0;
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .consultation-page {
+    padding: calc(var(--header-height) + 24px) 16px 48px;
+  }
+
+  .consultation-title {
+    font-size: 1.75rem;
+  }
+
+  .consultation-card {
+    padding: 20px 16px;
+  }
+
+  .consultation-tabs {
+    flex-wrap: wrap;
+  }
+
+  .consultation-tab-btn {
+    padding: 8px 14px;
+    font-size: 0.875rem;
+  }
+}

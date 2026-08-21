@@ -16,7 +16,9 @@ build
 .parcel-cache
 coverage
 *.local
-.env.*.local
+.env
+.env.*
+
 
 # Editor directories and files
 .vscode/*
