@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import PushNotificationContainer from './components/Common/PushNotification';
 import ProtectedRoute from './components/Common/ProtectedRoute';
+import ErrorBoundary from './components/Common/ErrorBoundary';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
 import { db } from './firebase/config';
@@ -68,7 +69,13 @@ function AppShell() {
           <Route path="/articles/edit/:id" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Report /></ProtectedRoute>} />
           <Route path="/report" element={<ProtectedRoute><Report /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <ErrorBoundary title="Không thể tải trang hồ sơ">
+                <Profile />
+              </ErrorBoundary>
+            </ProtectedRoute>
+          } />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/settings/notifications" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />

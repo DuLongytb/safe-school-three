@@ -107,6 +107,41 @@ const fallbackArticles = [
   },
 ];
 
+const HERO_CAROUSEL_SLIDES = [
+  {
+    id: 1,
+    title: 'Bạn bè cùng nhau',
+    desc: 'Môi trường học tập thân thiện, chan hòa và ngập tràn niềm vui',
+    image: 'https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&w=1200&q=80',
+    alt: 'Nhóm học sinh cùng nhau trò chuyện và học tập vui vẻ trong khuôn viên trường',
+    tag: 'Bạn bè gắn kết'
+  },
+  {
+    id: 2,
+    title: 'Giáo viên đồng hành',
+    desc: 'Thầy cô luôn gần gũi, lắng nghe và dìu dắt từng bước đi',
+    image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=1200&q=80',
+    alt: 'Giáo viên thân thiện tương tác cùng nhóm học sinh trong giờ học',
+    tag: 'Thầy cô đồng hành'
+  },
+  {
+    id: 3,
+    title: 'Học sinh hỗ trợ nhau',
+    desc: 'Tình bạn chân thành, luôn lắng nghe và không ai bị bỏ lại phía sau',
+    image: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=1200&q=80',
+    alt: 'Học sinh hỗ trợ, động viên và sẻ chia cùng bạn bè',
+    tag: 'Sẻ chia & Động viên'
+  },
+  {
+    id: 4,
+    title: 'Hoạt động học đường',
+    desc: 'Teamwork sôi nổi, cùng nhau rèn luyện kỹ năng và trải nghiệm bổ ích',
+    image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=1200&q=80',
+    alt: 'Nhóm học sinh tham gia hoạt động nhóm và sáng tạo học đường',
+    tag: 'Hoạt động học đường'
+  },
+];
+
 const DEFAULT_ARTICLE_COVER = 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=600&q=80';
 
 export default function Home() {
@@ -115,6 +150,50 @@ export default function Home() {
   const [loadingArticles, setLoadingArticles] = useState(true);
   const [showHotlineModal, setShowHotlineModal] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Hero Carousel state
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(null);
+  const [touchEndX, setTouchEndX] = useState(null);
+
+  // Hero carousel autoplay (4.5s)
+  useEffect(() => {
+    if (isCarouselPaused) return;
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % HERO_CAROUSEL_SLIDES.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [isCarouselPaused]);
+
+  const handlePrevSlide = (e) => {
+    if (e) e.stopPropagation();
+    setCurrentSlide((prev) => (prev === 0 ? HERO_CAROUSEL_SLIDES.length - 1 : prev - 1));
+  };
+
+  const handleNextSlide = (e) => {
+    if (e) e.stopPropagation();
+    setCurrentSlide((prev) => (prev + 1) % HERO_CAROUSEL_SLIDES.length);
+  };
+
+  const handleTouchStart = (e) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchEndX(null);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX === null || touchEndX === null) return;
+    const distance = touchStartX - touchEndX;
+    if (distance > 45) {
+      handleNextSlide();
+    } else if (distance < -45) {
+      handlePrevSlide();
+    }
+  };
 
   const handleCopyHotline = () => {
     try {
@@ -209,15 +288,89 @@ export default function Home() {
           </div>
 
           <div className="hero-visual">
-            <div className="visual-card">
+            <div
+              className="visual-card"
+              onMouseEnter={() => setIsCarouselPaused(true)}
+              onMouseLeave={() => setIsCarouselPaused(false)}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {/* Floating top badge */}
               <div className="visual-badge-floating">
                 <span className="status-dot"></span> Đang hoạt động bảo mật
               </div>
-              <img
-                src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80"
-                alt="Safe School Community"
-                className="hero-image"
-              />
+
+              {/* 4-Image Carousel */}
+              <div className="hero-carousel" aria-roledescription="carousel" aria-label="Hình ảnh SafeSchool">
+                <div className="hero-carousel-track">
+                  {HERO_CAROUSEL_SLIDES.map((slide, index) => {
+                    const isActive = index === currentSlide;
+                    return (
+                      <div
+                        key={slide.id}
+                        className={`hero-slide ${isActive ? 'active' : ''}`}
+                        aria-hidden={!isActive}
+                      >
+                        <img
+                          src={slide.image}
+                          alt={slide.alt}
+                          className="hero-image"
+                          loading={index === 0 ? 'eager' : 'lazy'}
+                        />
+                        <div className="hero-slide-overlay">
+                          <span className="hero-slide-tag">{slide.tag}</span>
+                          <h4 className="hero-slide-title">{slide.title}</h4>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Prev / Next Minimalist Buttons */}
+                <button
+                  type="button"
+                  className="hero-carousel-nav hero-carousel-prev"
+                  onClick={handlePrevSlide}
+                  aria-label="Ảnh trước"
+                  title="Ảnh trước"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="hero-carousel-nav hero-carousel-next"
+                  onClick={handleNextSlide}
+                  aria-label="Ảnh tiếp theo"
+                  title="Ảnh tiếp theo"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+
+                {/* Minimalist Indicators */}
+                <div className="hero-carousel-indicators" role="tablist" aria-label="Chọn slide">
+                  {HERO_CAROUSEL_SLIDES.map((slide, index) => (
+                    <button
+                      key={slide.id}
+                      type="button"
+                      className={`hero-carousel-dot ${index === currentSlide ? 'active' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentSlide(index);
+                      }}
+                      aria-label={`Chuyển tới slide ${index + 1}: ${slide.title}`}
+                      aria-selected={index === currentSlide}
+                      role="tab"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Floating bottom glass stats card */}
               <div className="glass-stats-card">
                 <div className="avatar-group">
                   <span className="avatar">👩‍🏫</span>

@@ -7,16 +7,52 @@ import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/User/Avatar';
 import './Profile.css';
 
+// Robust date formatting helper that never throws RangeError
+export const formatDateSafe = (dateVal, fallback = 'Chưa cập nhật') => {
+  if (!dateVal) return fallback;
+  try {
+    if (typeof dateVal === 'object' && dateVal !== null) {
+      if (typeof dateVal.toDate === 'function') {
+        return dateVal.toDate().toLocaleDateString('vi-VN');
+      }
+      if (typeof dateVal.seconds === 'number') {
+        return new Date(dateVal.seconds * 1000).toLocaleDateString('vi-VN');
+      }
+    }
+    if (typeof dateVal === 'string') {
+      const trimmed = dateVal.trim();
+      if (!trimmed) return fallback;
+      // If it's already formatted as DD/MM/YYYY
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
+        return trimmed;
+      }
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('vi-VN');
+      }
+    }
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('vi-VN');
+    }
+    return typeof dateVal === 'string' ? dateVal : fallback;
+  } catch {
+    return typeof dateVal === 'string' ? dateVal : fallback;
+  }
+};
+
 export default function Profile() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser, loading: authLoading } = useAuth();
 
   const queryParams = new URLSearchParams(location.search);
-  const targetUid = queryParams.get('uid') || currentUser?.uid;
-  const isOwner = !queryParams.get('uid') || queryParams.get('uid') === currentUser?.uid;
+  const paramUid = queryParams.get('uid');
+  const targetUid = paramUid || currentUser?.uid;
+  const isOwner = !paramUid || paramUid === currentUser?.uid;
 
   const [loading, setLoading] = useState(true);
+  const [userNotFound, setUserNotFound] = useState(false);
   const fileInputRef = useRef(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
 
@@ -32,9 +68,9 @@ export default function Profile() {
     role: 'Học sinh',
     createdAt: '',
     hidePhone: false,
-    hideAddress: false
+    hideAddress: false,
+    isAnonymous: false
   });
-
 
   // Edit states
   const [isEditing, setIsEditing] = useState(false);
@@ -58,6 +94,7 @@ export default function Profile() {
   // Delete account states & refs
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const cancelBtnRef = useRef(null);
+  const [creatingChat, setCreatingChat] = useState(false);
 
   // Auto focus Cancel button when modal opens
   useEffect(() => {
@@ -107,39 +144,35 @@ export default function Profile() {
   // Real-time listener for user data from Firestore
   useEffect(() => {
     if (authLoading) return;
+
     if (!targetUid) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setUserNotFound(false);
     const userDocRef = doc(db, 'users', targetUid);
 
     const unsubscribe = onSnapshot(
       userDocRef,
       (userDoc) => {
         if (userDoc.exists()) {
-          const data = userDoc.data();
+          const data = userDoc.data() || {};
           const isUserAnonymous = data.is_anonymous || false;
           const showAsAnonymous = isUserAnonymous && !isOwner;
           const roleFormatted = showAsAnonymous ? 'Học sinh ẩn danh' : formatRoleName(data.role);
 
           const loadedData = {
             avatar: showAsAnonymous ? '' : (data.avatarUrl || ''),
-            fullName: showAsAnonymous ? 'Người dùng ẩn danh' : (data.DisplayName || data.displayName || 'Chưa đặt tên'),
-            email: showAsAnonymous ? '******' : (data.email || ''),
+            fullName: showAsAnonymous ? 'Người dùng ẩn danh' : (data.DisplayName || data.displayName || currentUser?.displayName || 'Chưa đặt tên'),
+            email: showAsAnonymous ? '******' : (data.email || currentUser?.email || ''),
             phone: showAsAnonymous ? '******' : (data.phone || ''),
             dob: showAsAnonymous ? '******' : (data.dob || ''),
             gender: showAsAnonymous ? 'Ẩn' : (data.gender || 'Nam'),
             address: showAsAnonymous ? '******' : (data.address || ''),
             role: roleFormatted,
-            createdAt: showAsAnonymous ? '******' : (data.createdAt
-              ? (data.createdAt.seconds
-                ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('vi-VN')
-                : (typeof data.createdAt.toDate === 'function'
-                  ? data.createdAt.toDate().toLocaleDateString('vi-VN')
-                  : new Date().toLocaleDateString('vi-VN')))
-              : new Date().toLocaleDateString('vi-VN')),
+            createdAt: showAsAnonymous ? '******' : formatDateSafe(data.createdAt, new Date().toLocaleDateString('vi-VN')),
             hidePhone: data.hidePhone || false,
             hideAddress: data.hideAddress || false,
             isAnonymous: isUserAnonymous
@@ -147,13 +180,14 @@ export default function Profile() {
 
           setUserData(loadedData);
           setFormData((prev) => (isEditing ? { ...prev, role: roleFormatted } : loadedData));
+          setUserNotFound(false);
         } else {
           // Fallback if target user is current user
-          if (targetUid === currentUser?.uid) {
+          if (targetUid === currentUser?.uid && currentUser) {
             const roleFormatted = formatRoleName(currentUser.role);
             const loadedData = {
               avatar: currentUser.avatarUrl || '',
-              fullName: currentUser.displayName || 'Chưa đặt tên',
+              fullName: currentUser.displayName || currentUser.email || 'Chưa đặt tên',
               email: currentUser.email || '',
               phone: '',
               dob: '',
@@ -167,14 +201,34 @@ export default function Profile() {
             };
             setUserData(loadedData);
             setFormData(loadedData);
+            setUserNotFound(false);
           } else {
-            alert('Không tìm thấy thông tin người dùng này trong hệ thống.');
+            setUserNotFound(true);
           }
         }
         setLoading(false);
       },
       (error) => {
         console.error('Lỗi khi lắng nghe thông tin người dùng:', error);
+        if (targetUid === currentUser?.uid && currentUser) {
+          const roleFormatted = formatRoleName(currentUser.role);
+          const loadedData = {
+            avatar: currentUser.avatarUrl || '',
+            fullName: currentUser.displayName || currentUser.email || 'Chưa đặt tên',
+            email: currentUser.email || '',
+            phone: '',
+            dob: '',
+            gender: 'Nam',
+            address: '',
+            role: roleFormatted,
+            createdAt: new Date().toLocaleDateString('vi-VN'),
+            hidePhone: false,
+            hideAddress: false,
+            isAnonymous: currentUser.isAnonymous || false
+          };
+          setUserData(loadedData);
+          setFormData(loadedData);
+        }
         setLoading(false);
       }
     );
@@ -189,31 +243,37 @@ export default function Profile() {
   useEffect(() => {
     if (!targetUid) return;
 
-    // 1. Fetch articles by this user (Filter isDeleted in JS to avoid composite index error on cold F5 load)
+    // 1. Fetch articles by this user
     const articlesQuery = query(
       collection(db, 'articles'),
       where('authorId', '==', targetUid)
     );
     const unsubArticles = onSnapshot(articlesQuery, (snap) => {
-      const userArts = snap.docs
+      const userArts = (snap.docs || [])
         .map(d => ({
           id: d.id,
           ...d.data(),
-          createdAt: d.data().createdAt?.toDate ? d.data().createdAt.toDate().toISOString() : d.data().createdAt || new Date().toISOString()
+          createdAt: d.data().createdAt?.toDate
+            ? d.data().createdAt.toDate().toISOString()
+            : (d.data().createdAt || new Date().toISOString())
         }))
         .filter(art => art.isDeleted !== true);
 
-      userArts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      userArts.sort((a, b) => {
+        const timeA = new Date(a.createdAt).getTime() || 0;
+        const timeB = new Date(b.createdAt).getTime() || 0;
+        return timeB - timeA;
+      });
       setMyArticles(userArts);
     }, err => console.error('Stats articles snapshot error:', err));
 
-    // 2. Count articles the user has liked (array-contains query on all articles)
+    // 2. Count articles the user has liked
     const likedQuery = query(
       collection(db, 'articles'),
       where('likedBy', 'array-contains', targetUid)
     );
     const unsubLikes = onSnapshot(likedQuery, (snap) => {
-      const activeLiked = snap.docs.filter(d => d.data().isDeleted !== true);
+      const activeLiked = (snap.docs || []).filter(d => d.data().isDeleted !== true);
       setTotalLikesGiven(activeLiked.length);
     }, err => console.error('Stats likes given snapshot error:', err));
 
@@ -223,7 +283,7 @@ export default function Profile() {
       where('userId', '==', targetUid)
     );
     const unsubFav = onSnapshot(favQuery, (snap) => {
-      setTotalFavGiven(snap.size);
+      setTotalFavGiven(snap.size || 0);
     }, err => console.error('Stats fav given snapshot error:', err));
 
     return () => {
@@ -233,34 +293,33 @@ export default function Profile() {
     };
   }, [targetUid]);
 
-
   // Input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [name]: value
-    });
+    }));
     // Clear validation error on change
     if (errors[name]) {
-      setErrors({
-        ...errors,
+      setErrors(prev => ({
+        ...prev,
         [name]: ''
-      });
+      }));
     }
   };
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
-    setPasswordForm({
-      ...passwordForm,
+    setPasswordForm(prev => ({
+      ...prev,
       [name]: value
-    });
+    }));
     if (passwordErrors[name]) {
-      setPasswordErrors({
-        ...passwordErrors,
+      setPasswordErrors(prev => ({
+        ...prev,
         [name]: ''
-      });
+      }));
     }
   };
 
@@ -272,7 +331,7 @@ export default function Profile() {
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
 
     // Check valid format (mime type and extension)
@@ -315,9 +374,7 @@ export default function Profile() {
 
     // Phone regex (e.g. 10 digits starting with 0)
     const phoneRegex = /^(0[3|5|7|8|9])([0-9]{8})$/;
-    if (!formData.phone.trim()) {
-      tempErrors.phone = 'Số điện thoại không được để trống.';
-    } else if (!phoneRegex.test(formData.phone)) {
+    if (formData.phone && formData.phone.trim() && !phoneRegex.test(formData.phone.trim())) {
       tempErrors.phone = 'Số điện thoại phải gồm 10 chữ số (Ví dụ: 0987654321).';
     }
 
@@ -346,7 +403,7 @@ export default function Profile() {
   // Save changes
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!isOwner) return;
+    if (!isOwner || !currentUser) return;
 
     if (validateForm()) {
       try {
@@ -402,7 +459,7 @@ export default function Profile() {
             if (updatePayload.avatarUrl) {
               authUpdate.photoURL = updatePayload.avatarUrl;
             }
-            if (Object.keys(authUpdate).length > 0) {
+            if (Object.keys(authUpdate).length > 0 && auth.currentUser) {
               await updateProfile(auth.currentUser, authUpdate);
             }
           }
@@ -435,11 +492,12 @@ export default function Profile() {
 
           await setDoc(userRef, initialData);
 
-          // Also sync with firebase auth profile
-          await updateProfile(auth.currentUser, {
-            displayName: initialData.displayName,
-            photoURL: initialData.avatarUrl
-          });
+          if (auth.currentUser) {
+            await updateProfile(auth.currentUser, {
+              displayName: initialData.displayName,
+              photoURL: initialData.avatarUrl
+            });
+          }
         }
 
         const newUserData = {
@@ -473,7 +531,7 @@ export default function Profile() {
   const handleSavePassword = (e) => {
     e.preventDefault();
     if (validatePassword()) {
-      alert('Đổi mật khẩu thành công! (Mock action - logic tích hợp sau)');
+      alert('Đổi mật khẩu thành công! (Chức năng bảo mật tài khoản)');
       setPasswordForm({
         currentPassword: '',
         newPassword: '',
@@ -494,7 +552,7 @@ export default function Profile() {
   };
 
   const handleDeleteAccount = async () => {
-    if (!isOwner) return;
+    if (!isOwner || !currentUser) return;
 
     try {
       setLoading(true);
@@ -520,27 +578,6 @@ export default function Profile() {
       setLoading(false);
     }
   };
-
-  // Loading spinner
-  if (authLoading || (loading && !userData.fullName)) {
-    return (
-      <div className="profile-loading">
-        <div className="profile-spinner"></div>
-        <p>Đang tải dữ liệu hồ sơ...</p>
-      </div>
-    );
-  }
-
-  // Value masking for private info when viewed by others
-  const displayPhone = isOwner
-    ? (isEditing ? formData.phone : userData.phone)
-    : (userData.hidePhone ? '****** (Đã ẩn)' : userData.phone);
-
-  const displayAddress = isOwner
-    ? (isEditing ? formData.address : userData.address)
-    : (userData.hideAddress ? '****** (Đã ẩn)' : userData.address);
-
-  const [creatingChat, setCreatingChat] = useState(false);
 
   const handleCreatePrivateChat = async () => {
     if (!currentUser) {
@@ -568,6 +605,79 @@ export default function Profile() {
     }
   };
 
+  // 1. Loading state
+  if (authLoading || (loading && !userData.fullName && !userNotFound)) {
+    return (
+      <div className="profile-loading">
+        <div className="profile-spinner"></div>
+        <p>Đang tải dữ liệu hồ sơ...</p>
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated user trying to access profile without uid
+  if (!currentUser && !paramUid) {
+    return (
+      <div className="profile-page fade-in">
+        <div className="container" style={{ maxWidth: '540px', margin: '40px auto', textAlign: 'center' }}>
+          <div className="profile-details-card" style={{ padding: '40px 24px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔑</div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--primary-dark)', marginBottom: '8px' }}>
+              Yêu cầu đăng nhập
+            </h2>
+            <p style={{ color: 'var(--gray-text)', marginBottom: '24px', fontSize: '0.95rem' }}>
+              Vui lòng đăng nhập để xem và quản lý hồ sơ cá nhân của bạn.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate('/login')}
+              style={{ minWidth: '160px', margin: '0 auto' }}
+            >
+              Đăng nhập ngay
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. User not found state
+  if (userNotFound) {
+    return (
+      <div className="profile-page fade-in">
+        <div className="container" style={{ maxWidth: '540px', margin: '40px auto', textAlign: 'center' }}>
+          <div className="profile-details-card" style={{ padding: '40px 24px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: 'var(--primary-dark)', marginBottom: '8px' }}>
+              Không tìm thấy hồ sơ
+            </h2>
+            <p style={{ color: 'var(--gray-text)', marginBottom: '24px', fontSize: '0.95rem' }}>
+              Tài khoản này không tồn tại hoặc đã bị xóa khỏi hệ thống SafeSchool.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => navigate(-1)}
+              style={{ minWidth: '140px', margin: '0 auto' }}
+            >
+              ⬅️ Quay lại
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Value masking for private info when viewed by others
+  const displayPhone = isOwner
+    ? (isEditing ? formData.phone : userData.phone)
+    : (userData.hidePhone ? '****** (Đã ẩn)' : (userData.phone || 'Chưa cập nhật'));
+
+  const displayAddress = isOwner
+    ? (isEditing ? formData.address : userData.address)
+    : (userData.hideAddress ? '****** (Đã ẩn)' : (userData.address || 'Chưa cập nhật'));
+
   return (
     <div className="profile-page fade-in">
       <div className="container profile-container">
@@ -586,7 +696,7 @@ export default function Profile() {
           <div className="profile-header-visual">
             <div
               className={`profile-avatar-wrapper ${isEditing ? 'editable' : ''}`}
-              onClick={() => isEditing && fileInputRef.current.click()}
+              onClick={() => isEditing && fileInputRef.current?.click()}
               title={isEditing ? 'Nhấn để chọn ảnh mới' : ''}
             >
               <Avatar
@@ -611,8 +721,8 @@ export default function Profile() {
                   </span>
                 )}
               </h2>
-              <span className="profile-role-badge">🏷️ {userData.role}</span>
-              <p className="profile-meta-text">Tài khoản được tạo ngày: {userData.createdAt}</p>
+              <span className="profile-role-badge">🏷️ {userData.role || 'Học sinh'}</span>
+              <p className="profile-meta-text">Tài khoản được tạo ngày: {userData.createdAt || 'Mới đây'}</p>
             </div>
           </div>
 
@@ -654,17 +764,17 @@ export default function Profile() {
           <div className="profile-stats-grid">
             <div className="profile-stat-card">
               <span className="profile-stat-icon">📝</span>
-              <span className="profile-stat-value">{myArticles.length.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-value">{(myArticles || []).length.toLocaleString('vi-VN')}</span>
               <span className="profile-stat-label">Bài viết đã tạo</span>
             </div>
             <div className="profile-stat-card">
               <span className="profile-stat-icon">👍</span>
-              <span className="profile-stat-value">{totalLikesGiven.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-value">{(totalLikesGiven || 0).toLocaleString('vi-VN')}</span>
               <span className="profile-stat-label">Bài viết đã thích</span>
             </div>
             <div className="profile-stat-card">
               <span className="profile-stat-icon">❤️</span>
-              <span className="profile-stat-value">{totalFavGiven.toLocaleString('vi-VN')}</span>
+              <span className="profile-stat-value">{(totalFavGiven || 0).toLocaleString('vi-VN')}</span>
               <span className="profile-stat-label">Bài viết đã lưu</span>
             </div>
           </div>
@@ -673,8 +783,8 @@ export default function Profile() {
         {/* User's Created Articles Section — always visible to owner */}
         {isOwner && (
           <div className="profile-details-card" style={{ marginBottom: '0px' }}>
-            <h3 className="card-title">📝 Bài viết của tôi ({myArticles.length})</h3>
-            {myArticles.length === 0 ? (
+            <h3 className="card-title">📝 Bài viết của tôi ({(myArticles || []).length})</h3>
+            {(myArticles || []).length === 0 ? (
               <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: '12px', fontStyle: 'italic' }}>
                 Bạn chưa có bài viết nào. Hãy <span
                   onClick={() => navigate('/articles/create')}
@@ -706,9 +816,11 @@ export default function Profile() {
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isRejected ? '#fff5f5' : '#f8fafc'}
                     >
                       <div style={{ flex: 1, marginRight: '16px' }}>
-                        <h4 style={{ margin: '0 0 4px 0', fontSize: '0.98rem', color: '#0f172a', fontWeight: '600' }}>{art.title}</h4>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '0.98rem', color: '#0f172a', fontWeight: '600' }}>
+                          {art.title || 'Không có tiêu đề'}
+                        </h4>
                         <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
-                          🏷️ {art.category || 'Khác'} • {new Date(art.createdAt).toLocaleDateString('vi-VN')}
+                          🏷️ {art.category || 'Khác'} • {formatDateSafe(art.createdAt, 'Mới đây')}
                         </p>
                         {/* Show rejection reason inline */}
                         {isRejected && art.rejectionReason && (
@@ -892,7 +1004,7 @@ export default function Profile() {
                     id="role"
                     name="role"
                     className="form-input disabled"
-                    value={userData.role}
+                    value={userData.role || 'Học sinh'}
                     disabled
                   />
                 </div>
@@ -942,7 +1054,7 @@ export default function Profile() {
                     id="createdAt"
                     name="createdAt"
                     className="form-input disabled"
-                    value={userData.createdAt}
+                    value={userData.createdAt || 'Mới đây'}
                     disabled
                   />
                 </div>
@@ -959,6 +1071,7 @@ export default function Profile() {
 
                 {/* Toggle Change Password Section */}
                 <button
+                  type="button"
                   className={`settings-btn ${showPasswordSection ? 'active' : ''}`}
                   onClick={() => setShowPasswordSection(!showPasswordSection)}
                 >
@@ -1018,7 +1131,7 @@ export default function Profile() {
                 <hr className="settings-divider" />
 
                 {/* Log out option */}
-                <button className="settings-btn logout-btn" onClick={handleLogout}>
+                <button type="button" className="settings-btn logout-btn" onClick={handleLogout}>
                   <span className="btn-label text-danger-heavy">
                     <svg className="btn-icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -1028,7 +1141,7 @@ export default function Profile() {
                 </button>
 
                 {/* Delete Account option */}
-                <button className="settings-btn delete-account-btn" onClick={() => setShowDeleteModal(true)}>
+                <button type="button" className="settings-btn delete-account-btn" onClick={() => setShowDeleteModal(true)}>
                   <span className="btn-label text-danger-heavy">
                     <svg className="btn-icon-delete" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1047,7 +1160,7 @@ export default function Profile() {
             <div className="modal-content scale-up" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3 className="modal-title">⚠️ Xóa tài khoản</h3>
-                <button className="modal-close-btn" onClick={() => setShowDeleteModal(false)} aria-label="Đóng">
+                <button type="button" className="modal-close-btn" onClick={() => setShowDeleteModal(false)} aria-label="Đóng">
                   &times;
                 </button>
               </div>

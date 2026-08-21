@@ -432,16 +432,35 @@ export const getCommentsService = async (articleId) => {
 };
 
 /**
+ * Helper to generate a persistent random student name for anonymous comments
+ * Format: "Bạn học #XXXX" (e.g. Bạn học #4821)
+ */
+export const generateAnonymousStudentName = () => {
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  return `Bạn học #${randomNum}`;
+};
+
+/**
  * Add a comment to an article
  */
-export const addCommentService = async (articleId, user, content) => {
+export const addCommentService = async (articleId, user, content, options = {}) => {
   try {
+    const isAnonymous = Boolean(options.anonymous || options.isAnonymous);
+    const displayName = isAnonymous
+      ? (options.displayName || generateAnonymousStudentName())
+      : (user.displayName || user.email || 'Người dùng Safe School');
+
     const newComment = {
       articleId,
       userId: user.uid,
-      userName: user.displayName || user.email || 'Người dùng Safe School',
-      userAvatar: user.avatarUrl || '',
+      userName: displayName,
+      displayName: displayName,
+      userAvatar: isAnonymous ? '' : (user.avatarUrl || ''),
+      anonymous: isAnonymous,
+      isAnonymous: isAnonymous,
       content: content.trim(),
+      likes: 0,
+      likedBy: [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };

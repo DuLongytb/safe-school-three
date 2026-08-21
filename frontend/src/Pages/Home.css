@@ -235,7 +235,7 @@
   flex-wrap: wrap;
 }
 
-/* Hero Visuals */
+/* Hero Visuals & Carousel */
 .hero-visual {
   position: relative;
   display: flex;
@@ -244,25 +244,197 @@
 
 .visual-card {
   position: relative;
-  border-radius: 16px;
+  border-radius: 24px;
   overflow: visible;
   width: 100%;
-  max-width: 480px;
+  max-width: 490px;
+  user-select: none;
+  touch-action: pan-y;
+}
+
+/* Modern 4-Slide Carousel */
+.hero-carousel {
+  position: relative;
+  width: 100%;
+  height: 460px;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.8);
+  background-color: #f1f5f9;
+}
+
+.hero-carousel-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(1.03);
+  transition: opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), 
+              visibility 0.55s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hero-slide.active {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  pointer-events: auto;
+  z-index: 2;
 }
 
 .hero-image {
   width: 100%;
-  height: 460px;
+  height: 100%;
   object-fit: cover;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
-  border: 1px solid var(--gray-medium);
+  object-position: center 30%;
+  display: block;
+  border-radius: 24px;
+}
+
+.hero-slide-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 40px 18px 22px 18px;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.72) 0%, rgba(15, 23, 42, 0.25) 55%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  z-index: 3;
+  pointer-events: none;
+  max-width: 60%;
+}
+
+.hero-slide-tag {
+  display: inline-block;
+  background: rgba(37, 99, 235, 0.9);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.hero-slide-title {
+  color: #ffffff;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.3;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* Carousel Navigation Buttons */
+.hero-carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  color: var(--primary-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s ease;
+  z-index: 6;
+  padding: 0;
+  outline: none;
+}
+
+.visual-card:hover .hero-carousel-nav {
+  opacity: 0.92;
+  visibility: visible;
+}
+
+.hero-carousel-nav:hover {
+  opacity: 1 !important;
+  transform: translateY(-50%) scale(1.08);
+  background: #ffffff;
+  color: var(--primary-light);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+}
+
+.hero-carousel-prev {
+  left: 14px;
+}
+
+.hero-carousel-next {
+  right: 14px;
+}
+
+.hero-carousel-nav svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Carousel Indicators */
+.hero-carousel-indicators {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  z-index: 6;
+}
+
+.hero-carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.hero-carousel-dot:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.hero-carousel-dot.active {
+  width: 22px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .visual-badge-floating {
   position: absolute;
-  top: 20px;
-  left: -20px;
+  top: 18px;
+  left: -18px;
   background-color: var(--white);
   padding: 9px 16px;
   border-radius: 999px;
@@ -275,6 +447,7 @@
   gap: 8px;
   border: 1px solid var(--gray-medium);
   animation: floatBadge 3s ease-in-out infinite alternate;
+  z-index: 10;
 }
 
 .status-dot {
@@ -287,19 +460,20 @@
 
 .glass-stats-card {
   position: absolute;
-  bottom: -20px;
-  right: -20px;
-  background-color: rgba(255, 255, 255, 0.92);
+  bottom: -18px;
+  right: -18px;
+  background-color: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  padding: 18px 22px;
-  border-radius: 14px;
+  padding: 16px 20px;
+  border-radius: 16px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   border: 1px solid var(--gray-medium);
   max-width: 320px;
+  z-index: 10;
 }
 
 .avatar-group {
@@ -735,11 +909,16 @@
   }
   
   .visual-card {
-    max-width: 380px;
+    max-width: 440px;
   }
   
-  .hero-image {
-    height: 360px;
+  .hero-carousel {
+    height: 380px;
+  }
+  
+  .hero-carousel-nav {
+    opacity: 0.85;
+    visibility: visible;
   }
   
   .features-section, .articles-section {
@@ -766,6 +945,46 @@
   .hero-actions .btn {
     width: 100%;
   }
+
+  .visual-card {
+    max-width: 100%;
+  }
+
+  .hero-carousel {
+    height: 330px;
+    border-radius: 20px;
+  }
+
+  .hero-slide .hero-image {
+    border-radius: 20px;
+  }
+
+  .hero-slide-overlay {
+    max-width: 75%;
+    padding: 30px 14px 18px 14px;
+  }
+
+  .hero-slide-title {
+    font-size: 0.875rem;
+  }
+
+  .hero-carousel-nav {
+    width: 32px;
+    height: 32px;
+  }
+
+  .hero-carousel-prev {
+    left: 8px;
+  }
+
+  .hero-carousel-next {
+    right: 8px;
+  }
+
+  .hero-carousel-nav svg {
+    width: 15px;
+    height: 15px;
+  }
   
   .features-grid {
     grid-template-columns: 1fr;
@@ -781,12 +1000,14 @@
     left: 8px;
     top: 14px;
     padding: 7px 12px;
+    font-size: 0.75rem;
   }
   
   .glass-stats-card {
     right: 8px;
     bottom: -16px;
-    padding: 12px 16px;
+    padding: 12px 14px;
+    max-width: 260px;
   }
 
   .cta-banner-card {

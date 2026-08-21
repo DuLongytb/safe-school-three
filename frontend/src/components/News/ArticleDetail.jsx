@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../firebase/config';
@@ -17,23 +17,76 @@ import {
   deleteCommentService,
   deleteArticleCascadeService,
   approveArticleService,
-  rejectArticleService
+  rejectArticleService,
+  generateAnonymousStudentName
 } from '../../services/articleService';
 import { createNotification } from '../../services/notificationService';
 import './ArticleDetail.css';
 
-// ── CommentItem: real-time user sync + like + reply ──────────────────────────
+// ── Helper: Relative time format (e.g. "Vừa xong", "5 phút trước", "2 giờ trước") ──
+export const formatTimeAgo = (dateVal) => {
+  if (!dateVal) return 'Vừa xong';
+  try {
+    let date;
+    if (typeof dateVal === 'object' && dateVal !== null) {
+      if (typeof dateVal.toDate === 'function') date = dateVal.toDate();
+      else if (typeof dateVal.seconds === 'number') date = new Date(dateVal.seconds * 1000);
+    }
+    if (!date) date = new Date(dateVal);
+    if (isNaN(date.getTime())) return 'Vừa xong';
+
+    const now = new Date();
+    const diffSec = Math.floor((now - date) / 1000);
+
+    if (diffSec < 45) return 'Vừa xong';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} phút trước`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} giờ trước`;
+    if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)} ngày trước`;
+
+    return date.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch {
+    return 'Vừa xong';
+  }
+};
+
+// ── CommentItem: Facebook-inspired modern comment bubble + likes + replies ──
 function CommentItem({
-  cmt, depth = 0,
-  user, allComments,
-  editingCommentId, editingCommentText,
-  setEditingCommentId, setEditingCommentText,
-  handleSaveEditComment, handleDeleteComment,
-  handleUserClick, formatDate,
+  cmt,
+  depth = 0,
+  user,
+  allComments,
+  articleAuthorId,
+  canModerate,
+  editingCommentId,
+  editingCommentText,
+  setEditingCommentId,
+  setEditingCommentText,
+  handleSaveEditComment,
+  handleDeleteComment,
+  handleUserClick,
+  formatDate,
   onReplySubmit,
+  showToast,
 }) {
-  const [cmtUserName, setCmtUserName] = useState(cmt.userName || 'Thành viên');
-  const [cmtUserAvatar, setCmtUserAvatar] = useState(cmt.userAvatar || '');
+  const isInitialAnon = Boolean(
+    cmt.anonymous ||
+    cmt.isAnonymous ||
+    cmt.is_anonymous ||
+    cmt.userId === 'anonymous' ||
+    cmt.userName === 'Ẩn danh' ||
+    cmt.userName === 'Người dùng ẩn danh' ||
+    (cmt.displayName && typeof cmt.displayName === 'string' && cmt.displayName.startsWith('Bạn học #')) ||
+    (cmt.userName && typeof cmt.userName === 'string' && cmt.userName.startsWith('Bạn học #'))
+  );
+  const [isAnonymousUser, setIsAnonymousUser] = useState(isInitialAnon);
+  const [cmtUserName, setCmtUserName] = useState(
+    cmt.displayName || cmt.userName || (isInitialAnon ? 'Bạn học #----' : 'Thành viên')
+  );
+  const [cmtUserAvatar, setCmtUserAvatar] = useState(isInitialAnon ? '' : (cmt.userAvatar || ''));
   const [likeCount, setLikeCount] = useState(cmt.likes || 0);
   const [isLikedByMe, setIsLikedByMe] = useState(
     user && cmt.likedBy && Array.isArray(cmt.likedBy)
@@ -42,32 +95,46 @@ function CommentItem({
   );
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [isAnonymousReply, setIsAnonymousReply] = useState(false);
   const [submittingReply, setSubmittingReply] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
+  const menuRef = useRef(null);
+  const replyInputRef = useRef(null);
 
-  // Real-time author sync
+  // Real-time author profile sync - ONLY sync if NOT anonymous!
   useEffect(() => {
-    if (!cmt.userId) return;
+    // If comment is stored as anonymous, NEVER fetch or overwrite with real user profile
+    if (isInitialAnon || cmt.anonymous || cmt.isAnonymous || cmt.is_anonymous || !cmt.userId || cmt.userId === 'anonymous') {
+      setIsAnonymousUser(true);
+      setCmtUserName(cmt.displayName || cmt.userName || 'Bạn học #----');
+      setCmtUserAvatar('');
+      return;
+    }
+
     const unsub = onSnapshot(doc(db, 'users', cmt.userId), (snap) => {
       if (snap.exists()) {
-        const d = snap.data();
-        if (d.is_anonymous) {
-          setCmtUserName('Người dùng ẩn danh');
+        const d = snap.data() || {};
+        if (d.is_anonymous || d.isAnonymous) {
+          setIsAnonymousUser(true);
+          setCmtUserName(cmt.displayName || cmt.userName || 'Ẩn danh');
           setCmtUserAvatar('');
         } else {
-          setCmtUserName(d.DisplayName || d.displayName || cmt.userName || 'Thành viên');
+          setIsAnonymousUser(false);
+          setCmtUserName(d.DisplayName || d.displayName || cmt.displayName || cmt.userName || 'Thành viên');
           setCmtUserAvatar(d.avatarUrl || '');
         }
       }
     }, err => console.error('CommentItem user snapshot error:', err));
     return () => unsub();
-  }, [cmt.userId]);
+  }, [cmt.userId, isInitialAnon, cmt.anonymous, cmt.isAnonymous, cmt.displayName, cmt.userName]);
 
-  // Real-time comment like sync
+  // Real-time comment likes sync
   useEffect(() => {
     if (!cmt.id) return;
     const unsub = onSnapshot(doc(db, 'comments', cmt.id), (snap) => {
       if (snap.exists()) {
-        const d = snap.data();
+        const d = snap.data() || {};
         setLikeCount(d.likes || 0);
         setIsLikedByMe(
           user && d.likedBy && Array.isArray(d.likedBy)
@@ -79,144 +146,409 @@ function CommentItem({
     return () => unsub();
   }, [cmt.id, user]);
 
+  // Close menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showMenu]);
+
+  // Auto focus reply textarea when opened
+  useEffect(() => {
+    if (showReplyBox && replyInputRef.current) {
+      replyInputRef.current.focus();
+    }
+  }, [showReplyBox]);
+
   const handleLikeComment = async (e) => {
     e.stopPropagation();
-    if (!user) { alert('Vui lòng đăng nhập để thích bình luận.'); return; }
-    if (user.uid === cmt.userId) return; // can't like own comment
-    const cmtRef = doc(db, 'comments', cmt.id);
-    if (isLikedByMe) {
-      await updateDoc(cmtRef, { likes: increment(-1), likedBy: arrayRemove(user.uid) });
-    } else {
-      await updateDoc(cmtRef, { likes: increment(1), likedBy: arrayUnion(user.uid) });
+    if (!user) {
+      showToast?.('Vui lòng đăng nhập để thích bình luận.');
+      return;
+    }
+    if (isLiking) return;
+
+    setIsLiking(true);
+    const prevLiked = isLikedByMe;
+    const prevCount = likeCount;
+
+    // Optimistic UI update
+    setIsLikedByMe(!prevLiked);
+    setLikeCount(prevLiked ? Math.max(0, prevCount - 1) : prevCount + 1);
+
+    try {
+      const cmtRef = doc(db, 'comments', cmt.id);
+      if (prevLiked) {
+        await updateDoc(cmtRef, {
+          likes: increment(-1),
+          likedBy: arrayRemove(user.uid)
+        });
+      } else {
+        await updateDoc(cmtRef, {
+          likes: increment(1),
+          likedBy: arrayUnion(user.uid)
+        });
+
+        // Send notification to comment author if not current user and not anonymous
+        if (cmt.userId && cmt.userId !== 'anonymous' && cmt.userId !== user.uid) {
+          await createNotification({
+            userId: cmt.userId,
+            title: 'Bình luận được thích',
+            message: `${user.displayName || 'Một người dùng'} vừa thích bình luận của bạn.`,
+            type: 'article_like',
+            relatedId: cmt.articleId,
+            relatedType: 'article',
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error liking comment:', err);
+      // Revert optimistic update
+      setIsLikedByMe(prevLiked);
+      setLikeCount(prevCount);
+    } finally {
+      setIsLiking(false);
     }
   };
 
   const handleSubmitReply = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (!user) {
+      showToast?.('Vui lòng đăng nhập để trả lời bình luận.');
+      return;
+    }
     if (!replyText.trim() || submittingReply) return;
+
     setSubmittingReply(true);
     try {
-      await onReplySubmit(cmt.id, replyText, cmtUserName);
+      const parentAuthorDisplayName = cmtUserName;
+      await onReplySubmit(cmt.id, replyText, parentAuthorDisplayName, isAnonymousReply);
       setReplyText('');
+      setIsAnonymousReply(false);
       setShowReplyBox(false);
     } finally {
       setSubmittingReply(false);
     }
   };
 
+  const handleReplyKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmitReply();
+    }
+  };
+
+  const handleEditKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSaveEditComment(cmt.id);
+    }
+  };
+
+  const handleCopyComment = () => {
+    setShowMenu(false);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(cmt.content || '');
+      showToast?.('Đã sao chép nội dung bình luận!');
+    }
+  };
+
+  const handleReportComment = () => {
+    setShowMenu(false);
+    showToast?.('Đã gửi báo cáo bình luận tới ban quản trị SafeSchool.');
+  };
+
+  const isOwner = user && user.uid === cmt.userId && !isAnonymousUser;
+  const isArticleAuthor = !isAnonymousUser && cmt.userId === articleAuthorId;
+  const isEditing = editingCommentId === cmt.id;
+
+  // Flattened replies directly under this comment
   const replies = allComments.filter(c => c.parentId === cmt.id);
 
   return (
-    <div className={`comment-item ${depth > 0 ? 'comment-reply' : ''}`} style={depth > 0 ? { marginLeft: `${Math.min(depth, 3) * 40}px` } : {}}>
-      <Avatar
-        src={cmtUserAvatar}
-        alt={cmtUserName}
-        className="comment-avatar"
-        style={{ width: depth > 0 ? '36px' : '48px', height: depth > 0 ? '36px' : '48px' }}
-        onClick={() => handleUserClick(cmt.userId)}
-      />
-
-      <div className="comment-content-wrapper">
-        <div className="comment-header">
-          <span className="comment-user-name" onClick={() => handleUserClick(cmt.userId)}>
-            {cmtUserName}
-          </span>
-          {cmt.replyToName && (
-            <span className="comment-reply-to">↩ {cmt.replyToName}</span>
-          )}
-        </div>
-        <span className="comment-time">{formatDate(cmt.createdAt)}</span>
-
-        {editingCommentId === cmt.id ? (
-          <div className="edit-comment-box">
-            <textarea
-              className="comment-textarea edit-mode"
-              rows="2"
-              value={editingCommentText}
-              onChange={(e) => setEditingCommentText(e.target.value)}
-            />
-            <div className="edit-comment-actions">
-              <button className="btn btn-primary btn-xs" onClick={() => handleSaveEditComment(cmt.id)}>Lưu</button>
-              <button className="btn btn-secondary btn-xs" onClick={() => { setEditingCommentId(null); setEditingCommentText(''); }}>Hủy</button>
-            </div>
-          </div>
-        ) : (
-          <p className="comment-text">{cmt.content}</p>
-        )}
-
-        {/* Actions row */}
-        <div className="comment-actions">
-          {/* Like */}
-          {user && user.uid !== cmt.userId && (
-            <button
-              className={`comment-action-link ${isLikedByMe ? 'liked' : ''}`}
-              onClick={handleLikeComment}
-            >
-              {isLikedByMe ? '👍' : '👍🏻'} {likeCount > 0 ? likeCount : ''}
-            </button>
-          )}
-          {(!user || user.uid === cmt.userId) && likeCount > 0 && (
-            <span className="comment-like-count">👍 {likeCount}</span>
-          )}
-
-          {/* Reply */}
-          {user && depth < 3 && (
-            <button
-              className="comment-action-link"
-              onClick={() => setShowReplyBox(v => !v)}
-            >
-              Trả lời
-            </button>
-          )}
-
-          {/* Owner actions */}
-          {user && user.uid === cmt.userId && editingCommentId !== cmt.id && (
-            <>
-              <button className="comment-action-link" onClick={() => { setEditingCommentId(cmt.id); setEditingCommentText(cmt.content); }}>Sửa</button>
-              <button className="comment-action-link text-danger" onClick={() => handleDeleteComment(cmt.id)}>Xóa</button>
-            </>
-          )}
-        </div>
-
-        {/* Reply input box */}
-        {showReplyBox && (
-          <form className="reply-form" onSubmit={handleSubmitReply}>
-            <textarea
-              className="comment-textarea"
-              rows="2"
-              placeholder={`Trả lời ${cmtUserName}...`}
-              value={replyText}
-              onChange={e => setReplyText(e.target.value)}
-            />
-            <div className="edit-comment-actions">
-              <button type="submit" className="btn btn-primary btn-xs" disabled={submittingReply}>
-                {submittingReply ? 'Đang gửi...' : 'Gửi'}
-              </button>
-              <button type="button" className="btn btn-secondary btn-xs" onClick={() => setShowReplyBox(false)}>Hủy</button>
-            </div>
-          </form>
-        )}
-      </div>
-
-      {/* Recursive replies */}
-      {replies.map(reply => (
-        <CommentItem
-          key={reply.id}
-          cmt={reply}
-          depth={depth + 1}
-          user={user}
-          allComments={allComments}
-          editingCommentId={editingCommentId}
-          editingCommentText={editingCommentText}
-          setEditingCommentId={setEditingCommentId}
-          setEditingCommentText={setEditingCommentText}
-          handleSaveEditComment={handleSaveEditComment}
-          handleDeleteComment={handleDeleteComment}
-          handleUserClick={handleUserClick}
-          formatDate={formatDate}
-          onReplySubmit={onReplySubmit}
+    <div className={`modern-comment-thread ${depth > 0 ? 'is-reply' : ''}`}>
+      <div className="modern-comment-row">
+        {/* User Avatar - Always guaranteed with Anonymous fallback */}
+        <Avatar
+          src={isAnonymousUser ? '' : cmtUserAvatar}
+          alt={isAnonymousUser ? 'Ẩn danh' : cmtUserName}
+          isAnonymous={isAnonymousUser}
+          className="modern-comment-avatar"
+          style={{
+            width: depth > 0 ? '34px' : '40px',
+            height: depth > 0 ? '34px' : '40px',
+          }}
+          onClick={isAnonymousUser ? undefined : () => handleUserClick(cmt.userId)}
         />
-      ))}
+
+        <div className="modern-comment-body">
+          {/* Comment Bubble with Content & Menu */}
+          <div className="modern-comment-bubble-wrapper">
+            <div className={`modern-comment-bubble ${isEditing ? 'is-editing' : ''}`}>
+              {/* Top Header inside bubble */}
+              <div className="modern-bubble-header">
+                <div className="modern-bubble-user-info">
+                  <span
+                    className={`modern-comment-author ${isAnonymousUser ? 'is-anonymous' : ''}`}
+                    onClick={isAnonymousUser ? undefined : () => handleUserClick(cmt.userId)}
+                    style={isAnonymousUser ? { cursor: 'default' } : {}}
+                  >
+                    {isAnonymousUser ? 'Ẩn danh' : cmtUserName}
+                  </span>
+
+                  {isArticleAuthor && (
+                    <span className="modern-badge-author" title="Tác giả bài viết">
+                      Tác giả
+                    </span>
+                  )}
+
+                  {cmt.replyToName && (
+                    <span className="modern-reply-tag">
+                      ↩ {cmt.replyToName}
+                    </span>
+                  )}
+                </div>
+
+                {/* 3-Dots Action Menu */}
+                <div className="modern-comment-menu-wrapper" ref={menuRef}>
+                  <button
+                    type="button"
+                    className="modern-comment-menu-btn"
+                    onClick={() => setShowMenu(prev => !prev)}
+                    aria-label="Tùy chọn bình luận"
+                    title="Tùy chọn"
+                  >
+                    •••
+                  </button>
+
+                  {showMenu && (
+                    <div className="modern-comment-dropdown fade-in">
+                      {isOwner && (
+                        <button
+                          type="button"
+                          className="modern-dropdown-item"
+                          onClick={() => {
+                            setShowMenu(false);
+                            setEditingCommentId(cmt.id);
+                            setEditingCommentText(cmt.content);
+                          }}
+                        >
+                          ✏️ Chỉnh sửa
+                        </button>
+                      )}
+
+                      {(isOwner || canModerate) && (
+                        <button
+                          type="button"
+                          className="modern-dropdown-item text-danger"
+                          onClick={() => {
+                            setShowMenu(false);
+                            handleDeleteComment(cmt.id);
+                          }}
+                        >
+                          🗑️ Xóa bình luận
+                        </button>
+                      )}
+
+                      {!isOwner && (
+                        <button
+                          type="button"
+                          className="modern-dropdown-item"
+                          onClick={handleReportComment}
+                        >
+                          🚩 Báo cáo bình luận
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="modern-dropdown-item"
+                        onClick={handleCopyComment}
+                      >
+                        📋 Sao chép nội dung
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Bubble Content or Inline Edit */}
+              {isEditing ? (
+                <div className="modern-edit-box">
+                  <textarea
+                    className="modern-edit-textarea"
+                    rows="2"
+                    value={editingCommentText}
+                    onChange={(e) => setEditingCommentText(e.target.value)}
+                    onKeyDown={handleEditKeyDown}
+                    autoFocus
+                  />
+                  <div className="modern-edit-actions">
+                    <span className="modern-edit-hint">Nhấn Enter để lưu</span>
+                    <div className="modern-edit-btn-group">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-xs"
+                        onClick={() => {
+                          setEditingCommentId(null);
+                          setEditingCommentText('');
+                        }}
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-xs"
+                        onClick={() => handleSaveEditComment(cmt.id)}
+                        disabled={!editingCommentText.trim()}
+                      >
+                        Lưu
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="modern-comment-text">{cmt.content}</p>
+              )}
+            </div>
+
+            {/* Like Counter Badge floating on bottom right of bubble */}
+            {likeCount > 0 && (
+              <div className="modern-like-badge" title={`${likeCount} người thích`}>
+                <span className="like-badge-icon">👍</span>
+                <span className="like-badge-count">{likeCount}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Action Row: Like · Reply · Timestamp */}
+          <div className="modern-comment-actions-row">
+            {/* Like Button */}
+            <button
+              type="button"
+              className={`modern-action-btn like-action ${isLikedByMe ? 'is-liked' : ''}`}
+              onClick={handleLikeComment}
+              title={isLikedByMe ? 'Bỏ thích' : 'Thích bình luận này'}
+            >
+              <span className="action-icon">👍</span>
+              <span>{isLikedByMe ? 'Đã thích' : 'Thích'}</span>
+            </button>
+
+            <span className="modern-action-divider">·</span>
+
+            {/* Reply Button */}
+            <button
+              type="button"
+              className="modern-action-btn reply-action"
+              onClick={() => {
+                if (!user) {
+                  showToast?.('Vui lòng đăng nhập để trả lời bình luận.');
+                  return;
+                }
+                setShowReplyBox(prev => !prev);
+              }}
+            >
+              <span>Trả lời</span>
+            </button>
+
+            <span className="modern-action-divider">·</span>
+
+            {/* Timestamp with full date tooltip */}
+            <span className="modern-comment-time" title={formatDate(cmt.createdAt)}>
+              {formatTimeAgo(cmt.createdAt)}
+            </span>
+          </div>
+
+          {/* Inline Reply Input Box */}
+          {showReplyBox && (
+            <div className="modern-reply-input-box fade-in">
+              <Avatar
+                src={isAnonymousReply ? '' : user?.avatarUrl}
+                alt={isAnonymousReply ? 'Ẩn danh' : (user?.displayName || 'Your Avatar')}
+                isAnonymous={isAnonymousReply}
+                className="modern-reply-user-avatar"
+                style={{ width: '32px', height: '32px' }}
+              />
+              <div className="modern-reply-form-wrapper">
+                <textarea
+                  ref={replyInputRef}
+                  className="modern-reply-textarea"
+                  rows={2}
+                  placeholder={`Trả lời ${cmtUserName}...`}
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  onKeyDown={handleReplyKeyDown}
+                />
+                <div className="modern-reply-actions-bar">
+                  <label className="comment-anonymous-toggle">
+                    <input
+                      type="checkbox"
+                      checked={isAnonymousReply}
+                      onChange={(e) => setIsAnonymousReply(e.target.checked)}
+                    />
+                    <span className="anon-toggle-text">Trả lời ẩn danh</span>
+                  </label>
+
+                  <div className="modern-reply-btn-group">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs"
+                      onClick={() => {
+                        setReplyText('');
+                        setIsAnonymousReply(false);
+                        setShowReplyBox(false);
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-xs"
+                      onClick={handleSubmitReply}
+                      disabled={!replyText.trim() || submittingReply}
+                    >
+                      {submittingReply ? 'Đang gửi...' : 'Trả lời'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Child Replies */}
+          {replies.length > 0 && (
+            <div className="modern-replies-container">
+              {replies.map(reply => (
+                <CommentItem
+                  key={reply.id}
+                  cmt={reply}
+                  depth={depth + 1}
+                  user={user}
+                  allComments={allComments}
+                  articleAuthorId={articleAuthorId}
+                  canModerate={canModerate}
+                  editingCommentId={editingCommentId}
+                  editingCommentText={editingCommentText}
+                  setEditingCommentId={setEditingCommentId}
+                  setEditingCommentText={setEditingCommentText}
+                  handleSaveEditComment={handleSaveEditComment}
+                  handleDeleteComment={handleDeleteComment}
+                  handleUserClick={handleUserClick}
+                  formatDate={formatDate}
+                  onReplySubmit={onReplySubmit}
+                  showToast={showToast}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -243,16 +575,43 @@ export default function ArticleDetail() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoritesCount, setFavoritesCount] = useState(0);
 
-  // Comments
+  // Comments & Modern Interactions
   const [comments, setComments] = useState([]);
   const [newCommentText, setNewCommentText] = useState('');
+  const [isInputExpanded, setIsInputExpanded] = useState(false);
+  const [isAnonymousComment, setIsAnonymousComment] = useState(false);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentSort, setCommentSort] = useState('newest'); // 'newest' | 'popular' | 'oldest'
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editingCommentText, setEditingCommentText] = useState('');
+  const [commentToast, setCommentToast] = useState({ message: '', isVisible: false });
 
   // UI
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
+  const sortDropdownRef = useRef(null);
+  const mainInputRef = useRef(null);
+
+  const showToast = (message) => {
+    setCommentToast({ message, isVisible: true });
+    setTimeout(() => {
+      setCommentToast({ message: '', isVisible: false });
+    }, 3000);
+  };
+
+  // Close sort dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target)) {
+        setShowSortDropdown(false);
+      }
+    };
+    if (showSortDropdown) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showSortDropdown]);
 
   // ── Fetch article + comments ──
   useEffect(() => {
@@ -262,14 +621,19 @@ export default function ArticleDetail() {
   // ── Real-time author sync ──
   useEffect(() => {
     if (!article) return;
+    if (article.authorId === 'anonymous' || article.is_anonymous || article.isAnonymous) {
+      setAuthorName('Ẩn danh');
+      setAuthorAvatar('');
+      return;
+    }
     setAuthorName(article.authorName || 'Safe School Author');
     setAuthorAvatar(article.authorAvatar || '');
-    if (article.authorExists === false || !article.authorId || article.authorId === 'anonymous') return;
+    if (article.authorExists === false || !article.authorId) return;
 
     const unsub = onSnapshot(doc(db, 'users', article.authorId), (snap) => {
       if (snap.exists()) {
         const d = snap.data();
-        if (d.is_anonymous) { setAuthorName('Người dùng ẩn danh'); setAuthorAvatar(''); }
+        if (d.is_anonymous || d.isAnonymous) { setAuthorName('Ẩn danh'); setAuthorAvatar(''); }
         else {
           setAuthorName(d.DisplayName || d.displayName || article.authorName || 'Safe School Author');
           setAuthorAvatar(d.avatarUrl || '');
@@ -277,7 +641,7 @@ export default function ArticleDetail() {
       }
     }, err => console.error('ArticleDetail author snapshot error:', err));
     return () => unsub();
-  }, [article?.authorId, article?.authorExists]);
+  }, [article?.authorId, article?.authorExists, article?.is_anonymous, article?.isAnonymous]);
 
   // ── Real-time fav sync ──
   useEffect(() => {
@@ -316,7 +680,6 @@ export default function ArticleDetail() {
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || new Date().toISOString(),
         };
       });
-      cmts.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       setComments(cmts);
     }, err => console.error('Comments snapshot error:', err));
     return () => unsub();
@@ -395,44 +758,70 @@ export default function ArticleDetail() {
     }
   };
 
-  // ── Add comment ──
+  // ── Add comment (with persistent anonymous option) ──
   const handleAddComment = async (e) => {
-    e.preventDefault();
-    if (!user) { alert('Vui lòng đăng nhập để bình luận.'); navigate('/login'); return; }
-    if (!newCommentText.trim()) return;
+    if (e) e.preventDefault();
+    if (!user) {
+      alert('Vui lòng đăng nhập để bình luận.');
+      navigate('/login');
+      return;
+    }
+    if (!newCommentText.trim() || submittingComment) return;
+
     setSubmittingComment(true);
     try {
-      await addCommentService(id, user, newCommentText);
+      await addCommentService(id, user, newCommentText, { anonymous: isAnonymousComment });
       if (article?.authorId && article.authorId !== user.uid) {
+        const commentSenderName = isAnonymousComment ? 'Một bạn học' : (user.displayName || 'Một người dùng');
         await createNotification({
           userId: article.authorId,
           title: 'Có bình luận mới',
-          message: `${user.displayName || 'Một người dùng'} vừa bình luận về bài viết "${article.title || 'của bạn'}".`,
+          message: `${commentSenderName} vừa bình luận về bài viết "${article.title || 'của bạn'}".`,
           type: 'article_comment',
           relatedId: id,
           relatedType: 'article',
         });
       }
       setNewCommentText('');
-      // onSnapshot will auto-update comments list
+      setIsAnonymousComment(false);
+      setIsInputExpanded(false);
+      showToast(isAnonymousComment ? 'Đã đăng bình luận ẩn danh thành công!' : 'Đã đăng bình luận thành công!');
     } catch (err) {
       console.error('Error adding comment:', err);
-      alert('Không thể gửi bình luận. Vui lòng thử lại.');
+      showToast('Không thể đăng bình luận. Vui lòng thử lại.');
     } finally {
       setSubmittingComment(false);
     }
   };
 
-  // ── Reply to comment ──
-  const handleReplySubmit = async (parentId, replyContent, replyToName) => {
-    if (!user) { alert('Vui lòng đăng nhập để trả lời.'); return; }
+  const handleMainInputKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAddComment();
+    }
+  };
+
+  // ── Reply to comment (with persistent anonymous option) ──
+  const handleReplySubmit = async (parentId, replyContent, replyToName, isReplyAnon = false) => {
+    if (!user) {
+      showToast('Vui lòng đăng nhập để trả lời.');
+      return;
+    }
     if (!replyContent.trim()) return;
     try {
+      const isAnonymous = Boolean(isReplyAnon);
+      const replyDisplayName = isAnonymous
+        ? generateAnonymousStudentName()
+        : (user.displayName || user.email || 'Người dùng Safe School');
+
       const newReply = {
         articleId: id,
         userId: user.uid,
-        userName: user.displayName || user.email || 'Người dùng Safe School',
-        userAvatar: user.avatarUrl || '',
+        userName: replyDisplayName,
+        displayName: replyDisplayName,
+        userAvatar: isAnonymous ? '' : (user.avatarUrl || ''),
+        anonymous: isAnonymous,
+        isAnonymous: isAnonymous,
         content: replyContent.trim(),
         parentId: parentId,
         replyToName: replyToName,
@@ -445,19 +834,21 @@ export default function ArticleDetail() {
 
       // Send notification to parent comment author if not current user
       const parentCmt = comments.find(c => c.id === parentId);
-      if (parentCmt?.userId && parentCmt.userId !== user.uid) {
+      if (parentCmt?.userId && parentCmt.userId !== 'anonymous' && parentCmt.userId !== user.uid) {
+        const replySenderName = isAnonymous ? 'Một bạn học' : (user.displayName || 'Một người dùng');
         await createNotification({
           userId: parentCmt.userId,
           title: 'Có phản hồi cho bình luận của bạn',
-          message: `${user.displayName || 'Một người dùng'} vừa trả lời bình luận của bạn trong bài viết "${article?.title || 'bài viết'}".`,
+          message: `${replySenderName} vừa trả lời bình luận của bạn trong bài viết "${article?.title || 'bài viết'}".`,
           type: 'comment_reply',
           relatedId: id,
           relatedType: 'article',
         });
       }
+      showToast(isAnonymous ? 'Đã gửi câu trả lời ẩn danh!' : 'Đã gửi câu trả lời!');
     } catch (err) {
       console.error('Error adding reply:', err);
-      alert('Không thể gửi trả lời. Vui lòng thử lại.');
+      showToast('Không thể gửi trả lời. Vui lòng thử lại.');
     }
   };
 
@@ -469,9 +860,10 @@ export default function ArticleDetail() {
       setComments(prev => prev.map(c => c.id === commentId ? { ...c, content: editingCommentText } : c));
       setEditingCommentId(null);
       setEditingCommentText('');
+      showToast('Đã cập nhật bình luận!');
     } catch (err) {
       console.error('Error updating comment:', err);
-      alert('Không thể cập nhật bình luận.');
+      showToast('Không thể cập nhật bình luận.');
     }
   };
 
@@ -483,10 +875,10 @@ export default function ArticleDetail() {
       // Also delete child replies
       const childIds = comments.filter(c => c.parentId === commentId).map(c => c.id);
       await Promise.all(childIds.map(cid => deleteCommentService(cid)));
-      // onSnapshot will auto-update
+      showToast('Đã xóa bình luận.');
     } catch (err) {
       console.error('Error deleting comment:', err);
-      alert('Không thể xóa bình luận.');
+      showToast('Không thể xóa bình luận.');
     }
   };
 
@@ -568,7 +960,29 @@ export default function ArticleDetail() {
     }
   };
 
+  // ── Filter and sort root comments ──
   const rootComments = comments.filter(c => !c.parentId);
+
+  const sortedRootComments = [...rootComments].sort((a, b) => {
+    if (commentSort === 'popular') {
+      const repliesA = comments.filter(c => c.parentId === a.id).length;
+      const repliesB = comments.filter(c => c.parentId === b.id).length;
+      const scoreA = (a.likes || 0) * 2 + repliesA * 3;
+      const scoreB = (b.likes || 0) * 2 + repliesB * 3;
+      return scoreB - scoreA;
+    }
+    if (commentSort === 'oldest') {
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    }
+    // Default 'newest'
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  const sortLabelMap = {
+    newest: 'Mới nhất',
+    popular: 'Phù hợp nhất',
+    oldest: 'Cũ nhất'
+  };
 
   if (loading) return (
     <div className="article-detail-container">
@@ -736,42 +1150,166 @@ export default function ArticleDetail() {
         {shareSuccess && <div className="share-toast">✅ Đã sao chép liên kết bài viết vào bộ nhớ tạm!</div>}
       </div>
 
-      {/* Comments Section */}
+      {/* ── Modern Comments Section ── */}
       <section className="comments-section" id="comments-section">
-        <h2 className="comments-title">Bình Luận ({comments.length})</h2>
+        {/* Comment Header with Sort Selector */}
+        <div className="comments-header-row">
+          <h2 className="comments-title">
+            Bình luận <span className="comments-count-pill">{comments.length}</span>
+          </h2>
 
-        <form onSubmit={handleAddComment} className="comment-form">
-          <div className="comment-input-row">
-            <Avatar src={user?.avatarUrl} alt="User Avatar" className="comment-user-avatar" style={{ width: '40px', height: '40px' }} />
-            <div className="comment-input-box">
-              <textarea
-                className="comment-textarea"
-                rows="3"
-                placeholder={user ? 'Viết bình luận của bạn tại đây...' : 'Đăng nhập để tham gia bình luận...'}
-                value={newCommentText}
-                onChange={(e) => setNewCommentText(e.target.value)}
-                disabled={!user}
-              />
-              <div className="comment-form-actions">
-                <button type="submit" className="btn btn-primary btn-sm" disabled={!user || !newCommentText.trim() || submittingComment}>
-                  {submittingComment ? 'Đang gửi...' : 'Gửi bình luận'}
+          {/* Sort Selector Dropdown */}
+          <div className="comments-sort-wrapper" ref={sortDropdownRef}>
+            <button
+              type="button"
+              className="comments-sort-btn"
+              onClick={() => setShowSortDropdown(prev => !prev)}
+              aria-label="Sắp xếp bình luận"
+            >
+              <span className="sort-label">Sắp xếp:</span>
+              <span className="sort-active-val">{sortLabelMap[commentSort]}</span>
+              <span className="sort-chevron">▾</span>
+            </button>
+
+            {showSortDropdown && (
+              <div className="comments-sort-menu fade-in">
+                <button
+                  type="button"
+                  className={`sort-menu-item ${commentSort === 'newest' ? 'active' : ''}`}
+                  onClick={() => {
+                    setCommentSort('newest');
+                    setShowSortDropdown(false);
+                  }}
+                >
+                  ⚡ Mới nhất
+                </button>
+                <button
+                  type="button"
+                  className={`sort-menu-item ${commentSort === 'popular' ? 'active' : ''}`}
+                  onClick={() => {
+                    setCommentSort('popular');
+                    setShowSortDropdown(false);
+                  }}
+                >
+                  🔥 Phù hợp nhất
+                </button>
+                <button
+                  type="button"
+                  className={`sort-menu-item ${commentSort === 'oldest' ? 'active' : ''}`}
+                  onClick={() => {
+                    setCommentSort('oldest');
+                    setShowSortDropdown(false);
+                  }}
+                >
+                  ⏳ Cũ nhất
                 </button>
               </div>
-            </div>
+            )}
           </div>
-        </form>
+        </div>
 
-        <div className="comments-list">
-          {rootComments.length === 0 ? (
-            <div className="no-comments-box"><p>Chưa có bình luận nào. Hãy là người đầu tiên chia sẻ ý kiến.</p></div>
+        {/* Global Comment Toast Notification */}
+        {commentToast.isVisible && (
+          <div className="comment-feedback-toast fade-in">
+            {commentToast.message}
+          </div>
+        )}
+
+        {/* Modern Facebook-inspired Comment Input Box */}
+        <div className="modern-comment-composer">
+          <Avatar
+            src={isAnonymousComment ? '' : user?.avatarUrl}
+            alt={isAnonymousComment ? 'Ẩn danh' : (user?.displayName || 'User')}
+            isAnonymous={isAnonymousComment}
+            className="composer-user-avatar"
+            style={{ width: '40px', height: '40px' }}
+          />
+
+          <div className={`composer-input-card ${isInputExpanded ? 'is-expanded' : ''}`}>
+            {user ? (
+              <>
+                <textarea
+                  ref={mainInputRef}
+                  className="composer-textarea"
+                  rows={isInputExpanded ? 3 : 1}
+                  placeholder="Viết bình luận..."
+                  value={newCommentText}
+                  onFocus={() => setIsInputExpanded(true)}
+                  onChange={(e) => setNewCommentText(e.target.value)}
+                  onKeyDown={handleMainInputKeyDown}
+                />
+
+                {isInputExpanded && (
+                  <div className="composer-actions-row fade-in">
+                    <div className="composer-options-left">
+                      <label className="comment-anonymous-toggle">
+                        <input
+                          type="checkbox"
+                          checked={isAnonymousComment}
+                          onChange={(e) => setIsAnonymousComment(e.target.checked)}
+                        />
+                        <span className="anon-toggle-text">Bình luận ẩn danh (Bạn học #XXXX)</span>
+                      </label>
+                      <span className="composer-shortcut-hint">
+                        Enter để gửi · Shift+Enter xuống dòng
+                      </span>
+                    </div>
+
+                    <div className="composer-btn-group">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setNewCommentText('');
+                          setIsAnonymousComment(false);
+                          setIsInputExpanded(false);
+                        }}
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm btn-post-comment"
+                        onClick={handleAddComment}
+                        disabled={!newCommentText.trim() || submittingComment}
+                      >
+                        {submittingComment ? 'Đang đăng...' : 'Đăng'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="composer-guest-box" onClick={() => navigate('/login')}>
+                <span className="guest-placeholder-text">Đăng nhập để tham gia bình luận...</span>
+                <button type="button" className="btn btn-primary btn-xs">
+                  Đăng nhập
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Comments Stream / List */}
+        <div className="modern-comments-stream">
+          {sortedRootComments.length === 0 ? (
+            <div className="modern-no-comments-state fade-in">
+              <div className="empty-chat-icon">💬</div>
+              <h3 className="empty-title">Chưa có bình luận nào</h3>
+              <p className="empty-desc">
+                Hãy là người đầu tiên chia sẻ suy nghĩ và cảm nhận của bạn về bài viết này.
+              </p>
+            </div>
           ) : (
-            rootComments.map(cmt => (
+            sortedRootComments.map(cmt => (
               <CommentItem
                 key={cmt.id}
                 cmt={cmt}
                 depth={0}
                 user={user}
                 allComments={comments}
+                articleAuthorId={article?.authorId}
+                canModerate={canModerate}
                 editingCommentId={editingCommentId}
                 editingCommentText={editingCommentText}
                 setEditingCommentId={setEditingCommentId}
@@ -781,6 +1319,7 @@ export default function ArticleDetail() {
                 handleUserClick={handleUserClick}
                 formatDate={formatDate}
                 onReplySubmit={handleReplySubmit}
+                showToast={showToast}
               />
             ))
           )}
