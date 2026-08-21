@@ -281,15 +281,15 @@ const ManageUsers = () => {
 
       {/* Users Table */}
       {!loading && !error && (
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+        <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflowX: 'auto', boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)' }}>
+          <table style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: '600' }}>
-                <th style={{ padding: '14px 20px' }}>Tên Người Dùng</th>
-                <th style={{ padding: '14px 20px' }}>Email</th>
-                <th style={{ padding: '14px 20px' }}>Vai Trò</th>
-                <th style={{ padding: '14px 20px' }}>Trạng Thái</th>
-                <th style={{ padding: '14px 20px', textAlign: 'right' }}>Thao Tác</th>
+                <th style={{ padding: '14px 18px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Thông Tin Tài Khoản</th>
+                <th style={{ padding: '14px 18px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Email</th>
+                <th style={{ padding: '14px 18px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Vai Trò</th>
+                <th style={{ padding: '14px 18px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>Trạng Thái</th>
+                <th style={{ padding: '14px 18px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '170px' }}>Thao Tác</th>
               </tr>
             </thead>
             <tbody>
@@ -306,13 +306,13 @@ const ManageUsers = () => {
 
                   return (
                     <tr key={u.uid} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.15s' }}>
-                      {/* Name & Avatar */}
-                      <td style={{ padding: '14px 20px' }}>
+                      {/* 1. Account Info: Avatar + Name + UID */}
+                      <td style={{ padding: '14px 18px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <div
                             style={{
-                              width: '36px',
-                              height: '36px',
+                              width: '38px',
+                              height: '38px',
                               borderRadius: '50%',
                               backgroundColor: isAdmin ? '#dc2626' : '#1e3c72',
                               color: '#fff',
@@ -321,40 +321,43 @@ const ManageUsers = () => {
                               justifyContent: 'center',
                               fontWeight: '700',
                               fontSize: '0.95rem',
+                              flexShrink: 0,
                             }}
                           >
                             {(u.displayName || u.email || 'U').charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <div style={{ fontWeight: '600', color: '#0f172a' }}>
-                              {u.displayName || 'Không tên'}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>
+                              {u.displayName || 'Chưa đặt tên'}
                             </div>
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                              UID: {u.uid.substring(0, 8)}...
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                              UID: {u.uid.substring(0, 10)}...
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Email */}
-                      <td style={{ padding: '14px 20px', color: '#334155' }}>
+                      {/* 2. Email */}
+                      <td style={{ padding: '14px 18px', verticalAlign: 'middle', color: '#334155', whiteSpace: 'nowrap', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {u.email || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Ẩn danh / Không email</span>}
                       </td>
 
-                      {/* Role Dropdown */}
-                      <td style={{ padding: '14px 20px' }}>
+                      {/* 3. Role Dropdown */}
+                      <td style={{ padding: '14px 18px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                         <select
                           value={u.role || 'student'}
                           onChange={(e) => handleChangeRole(u, e.target.value)}
                           style={{
-                            padding: '4px 10px',
+                            padding: '6px 12px',
                             borderRadius: '6px',
                             border: '1px solid #cbd5e1',
-                            fontSize: '0.825rem',
+                            fontSize: '0.85rem',
                             fontWeight: '600',
                             backgroundColor: isAdmin ? '#fef2f2' : '#f0fdf4',
                             color: isAdmin ? '#dc2626' : '#16a34a',
                             cursor: 'pointer',
+                            outline: 'none',
+                            whiteSpace: 'nowrap',
                           }}
                         >
                           <option value="student">Student</option>
@@ -364,33 +367,60 @@ const ManageUsers = () => {
                         </select>
                       </td>
 
-                      {/* Status */}
-                      <td style={{ padding: '14px 20px' }}>
+                      {/* 4. Status Badge */}
+                      <td style={{ padding: '14px 18px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                         {isActive ? (
-                          <span style={{ backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            backgroundColor: '#dcfce7',
+                            color: '#15803d',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.8rem',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap',
+                          }}>
                             ● Hoạt động
                           </span>
                         ) : (
-                          <span style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            backgroundColor: '#fee2e2',
+                            color: '#b91c1c',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '0.8rem',
+                            fontWeight: '600',
+                            whiteSpace: 'nowrap',
+                          }}>
                             🔒 Đã khóa
                           </span>
                         )}
                       </td>
 
-                      {/* Actions: Lock/Unlock & Delete */}
-                      <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      {/* 5. Actions: Lock/Unlock & Delete */}
+                      <td style={{ padding: '14px 18px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
                           <button
                             onClick={() => handleOpenToggleStatusModal(u)}
                             style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
                               padding: '6px 12px',
                               borderRadius: '6px',
-                              border: 'none',
+                              border: isActive ? '1px solid #fecaca' : '1px solid #bbf7d0',
                               backgroundColor: isActive ? '#fef2f2' : '#f0fdf4',
                               color: isActive ? '#dc2626' : '#16a34a',
                               fontWeight: '600',
                               fontSize: '0.825rem',
                               cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.15s ease',
                             }}
                           >
                             {isActive ? '🔒 Khóa' : '🔓 Mở'}
@@ -399,14 +429,19 @@ const ManageUsers = () => {
                           <button
                             onClick={() => handleOpenDeleteModal(u)}
                             style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
                               padding: '6px 12px',
                               borderRadius: '6px',
-                              border: 'none',
-                              backgroundColor: '#fee2e2',
-                              color: '#991b1b',
+                              border: '1px solid #fecdd3',
+                              backgroundColor: '#fff1f2',
+                              color: '#e11d48',
                               fontWeight: '600',
                               fontSize: '0.825rem',
                               cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.15s ease',
                             }}
                             title="Xóa vĩnh viễn tài khoản người dùng"
                           >

@@ -86,17 +86,28 @@ export default function SOS() {
 
         try {
             // 1. Tạo Báo cáo khẩn cấp trong Firestore (Basic Flow 7)
+            const isUserAnonymous = Boolean(user?.isAnonymous);
+            const senderName = user
+                ? (isUserAnonymous ? 'Người dùng ẩn danh' : (user.displayName || user.email || 'Người dùng'))
+                : 'Khách khẩn cấp (Chưa đăng nhập)';
+            const senderMail = user && !isUserAnonymous ? (user.email || '') : '';
+
             const reportRef = await addDoc(collection(db, 'reports'), {
-                user_id: user?.uid || 'guest',
-                user_name: user?.displayName || user?.email || 'Người dùng khẩn cấp',
-                user_email: user?.email || 'N/A',
+                userId: user?.uid || null,
+                user_id: user?.uid || null,
+                user_name: senderName,
+                user_email: senderMail,
+                sender: senderName,
+                senderEmail: senderMail,
+                isAnonymous: isUserAnonymous,
+                is_anonymous: isUserAnonymous,
                 type: 'sos_emergency',
                 title: '🚨 CẢNH BÁO SOS KHẨN CẤP',
                 description: 'Tín hiệu SOS đã được kích hoạt khẩn cấp từ ứng dụng!',
-                status: 'Chưa xử lý - Nguy cấp', // Theo đúng BR-SOS / Basic Flow 7
+                status: 'pending',
                 location: locationString,
                 coordinates: coords,
-                priority: 'HIGH', // BR-SOS-02
+                priority: 'sos',
                 createdAt: serverTimestamp(),
             });
 
@@ -104,10 +115,11 @@ export default function SOS() {
 
             // 2. Gửi Thông báo đẩy Push Notification cho Admin / Giáo viên / Tham vấn viên (Basic Flow 5)
             await addDoc(collection(db, 'notifications'), {
-                user_id: user?.uid || 'system',
+                user_id: user?.uid || null,
+                userId: user?.uid || null,
                 type: 'sos_alert',
                 title: '🚨 TÍN HIỆU SOS NGUY CẤP',
-                message: `${user?.displayName || 'Một học sinh/giáo viên'} vừa phát tín hiệu SOS khẩn cấp! Vị trí: ${locationString}`,
+                message: `${senderName} vừa phát tín hiệu SOS khẩn cấp! Vị trí: ${locationString}`,
                 read: false,
                 priority: 'HIGH',
                 createdAt: serverTimestamp(),

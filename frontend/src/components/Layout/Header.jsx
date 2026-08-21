@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { isModerator } from '../Common/ProtectedRoute';
 import Avatar from '../User/Avatar';
 import './Header.css';
 
@@ -58,20 +59,41 @@ export default function Header() {
     navigate('/sos');
   };
 
+  // Danh sách từ để ghép tên Anonymous ngẫu nhiên (12 × 10 = 120 tổ hợp)
+  const ANON_WORDS_A = ['Mây', 'Sao', 'Gió', 'Sương', 'Ánh', 'Bình', 'Trăng', 'Nắng', 'Thu', 'Xuân', 'Đông', 'Hạ'];
+  const ANON_WORDS_B = ['Xanh', 'Bạc', 'Vàng', 'Trắng', 'Tím', 'Hồng', 'Lam', 'Ngọc', 'Đỏ', 'Xám'];
+
+  const generateAnonymousName = () => {
+      const a = ANON_WORDS_A[Math.floor(Math.random() * ANON_WORDS_A.length)];
+      const b = ANON_WORDS_B[Math.floor(Math.random() * ANON_WORDS_B.length)];
+      return `Người dùng ${a} ${b}`;
+  };
+
   const handleToggleAnonymous = async () => {
-    setIsDropdownOpen(false);
-    if (!user) return;
-    try {
-      const { db } = await import('../../firebase/config');
-      const { doc, updateDoc } = await import('firebase/firestore');
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        is_anonymous: !user.isAnonymous
-      });
-    } catch (err) {
-      console.error('Lỗi khi bật/tắt chế độ ẩn danh:', err);
-      alert('Không thể cập nhật chế độ ẩn danh. Vui lòng thử lại.');
-    }
+      setIsDropdownOpen(false);
+      if (!user) return;
+      try {
+          const { db } = await import('../../firebase/config');
+          const { doc, updateDoc } = await import('firebase/firestore');
+          const userRef = doc(db, 'users', user.uid);
+
+          if (!user.isAnonymous) {
+              // Bật Anonymous: tạo tên ngẫu nhiên mới rồi lưu cùng flag
+              const anonymousDisplayName = generateAnonymousName();
+              await updateDoc(userRef, {
+                  is_anonymous: true,
+                  anonymousDisplayName: anonymousDisplayName,
+              });
+          } else {
+              // Tắt Anonymous: khôi phục chế độ bình thường, giữ nguyên UID
+              await updateDoc(userRef, {
+                  is_anonymous: false,
+              });
+          }
+      } catch (err) {
+          console.error('Lỗi khi bật/tắt chế độ ẩn danh:', err);
+          alert('Không thể cập nhật chế độ ẩn danh. Vui lòng thử lại.');
+      }
   };
 
   return (
@@ -106,13 +128,13 @@ export default function Header() {
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink to="/notifications" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-                Thông báo
+              <NavLink to="/consultation" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                Đặt lịch tham vấn
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink to="/consultation" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-                Đặt lịch tham vấn
+              <NavLink to="/notifications" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                Thông báo
               </NavLink>
             </li>
           </ul>
@@ -158,6 +180,11 @@ export default function Header() {
 
               {isDropdownOpen && (
                 <div className="more-dropdown fade-in">
+                  {isModerator(user.role) && (
+                    <button className="dropdown-item" onClick={() => { setIsDropdownOpen(false); navigate('/admin'); }} style={{ color: '#1e3c72', fontWeight: '600' }}>
+                      🛡️ Admin
+                    </button>
+                  )}
                   <button className="dropdown-item" onClick={handleFavoritesClick}>
                     ❤️ Bài viết yêu thích
                   </button>

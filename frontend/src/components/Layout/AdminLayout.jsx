@@ -35,6 +35,7 @@ const AdminLayout = () => {
     { path: '/admin', label: 'Dashboard', icon: '📊' },
     { path: '/admin/users', label: 'Quản lý Users', icon: '👥' },
     { path: '/admin/posts', label: 'Quản lý Bài viết', icon: '📰' },
+    { path: '/admin/reports-sos', label: 'Quản lý Báo cáo SOS', icon: '🚨' },
     { path: '/admin/reports', label: 'Quản lý Báo cáo', icon: '📋' },
     { path: '/admin/chat', label: 'Quản lý Phòng Chat', icon: '💬' },
   ];
@@ -86,19 +87,64 @@ const AdminLayout = () => {
         {/* Sidebar Header / Logo */}
         <div
           style={{
-            padding: '20px 16px',
+            padding: '20px 14px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'space-between',
+            gap: '8px',
             borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+            boxSizing: 'border-box',
           }}
         >
           {!collapsed && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-              <span style={{ fontSize: '1.6rem' }}>🛡️</span>
-              <span style={{ fontWeight: '700', fontSize: '1.15rem', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>
-                SafeSchool <span style={{ fontSize: '0.75rem', backgroundColor: '#3b82f6', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>Admin</span>
-              </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                minWidth: 0,
+                flex: '1 1 auto',
+              }}
+            >
+              <span style={{ fontSize: '1.5rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}>🛡️</span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: '700',
+                    fontSize: '1.1rem',
+                    letterSpacing: '0.5px',
+                    color: '#ffffff',
+                  }}
+                >
+                  SafeSchool
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
+                    backgroundColor: '#3b82f6',
+                    color: '#ffffff',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    flexShrink: 0,
+                    lineHeight: '1.2',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  ADM
+                </span>
+              </div>
             </div>
           )}
 
@@ -109,16 +155,22 @@ const AdminLayout = () => {
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
             style={{
-              background: 'rgba(255, 255, 255, 0.1)',
+              background: 'rgba(255, 255, 255, 0.12)',
               border: 'none',
               color: '#ffffff',
               borderRadius: '6px',
-              padding: '6px 10px',
+              width: '28px',
+              height: '28px',
+              minWidth: '28px',
+              padding: '0',
               cursor: 'pointer',
-              fontSize: '1rem',
+              fontSize: '0.85rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0,
+              marginLeft: collapsed ? '0' : '8px',
+              transition: 'background-color 0.2s ease',
             }}
           >
             {collapsed ? '▶' : '◀'}
@@ -128,7 +180,9 @@ const AdminLayout = () => {
         {/* Sidebar Navigation */}
         <nav style={{ flex: 1, padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {menuItems.map((item) => {
-            const isActive = location.pathname === item.path || (item.path !== '/admin' && location.pathname.startsWith(item.path));
+            const isActive = location.pathname === item.path
+              || (item.path !== '/admin' && location.pathname.startsWith(item.path + '/'))
+              || (item.path !== '/admin' && location.pathname === item.path);
             return (
               <Link
                 key={item.path}

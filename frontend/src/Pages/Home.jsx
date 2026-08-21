@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getFeaturedArticlesService } from '../services/articleService';
 import './Home.css';
 
 const stats = [
@@ -79,7 +80,7 @@ const features = [
   },
 ];
 
-const articles = [
+const fallbackArticles = [
   {
     id: 1,
     title: 'Kỹ năng phòng chống bạo lực học đường cho học sinh THCS',
@@ -106,8 +107,57 @@ const articles = [
   },
 ];
 
+const DEFAULT_ARTICLE_COVER = 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=600&q=80';
+
 export default function Home() {
   const { user } = useAuth();
+  const [featuredArticles, setFeaturedArticles] = useState([]);
+  const [loadingArticles, setLoadingArticles] = useState(true);
+  const [showHotlineModal, setShowHotlineModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyHotline = () => {
+    try {
+      navigator.clipboard.writeText('111');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    getFeaturedArticlesService(3)
+      .then((data) => {
+        if (isMounted) {
+          setFeaturedArticles(data);
+          setLoadingArticles(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Lỗi khi lấy bài viết chất lượng:', err);
+        if (isMounted) setLoadingArticles(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
   return (
     <div className="home-page fade-in">
@@ -131,8 +181,12 @@ export default function Home() {
             </p>
 
             <div className="hero-actions">
+              <Link to="/reports" className="btn btn-report-now">
+                📢 Báo cáo ngay
+              </Link>
+
               <Link to="/sos" className="btn btn-danger">
-                🚨 TRỢ GIÚP SOS KHẨN CẤP
+                🚨 TRỢ GIÚP SOS
               </Link>
 
               <Link to="/articles" className="btn btn-primary">
@@ -232,35 +286,57 @@ export default function Home() {
       <section className="articles-section">
         <div className="container">
           <div className="section-header">
-            <h2 className="section-title">Bài Viết Nổi Bật</h2>
+            <h2 className="section-title">Bài Viết Chất Lượng</h2>
             <p className="section-subtitle">
               Cập nhật kiến thức bổ ích và những kỹ năng sống quan trọng từ đội ngũ chuyên gia hàng đầu hay từ những người dùng có hiểu biết về vấn đề.
             </p>
           </div>
 
           <div className="articles-grid">
-            {articles.map((art) => (
-              <article key={art.id} className="article-card">
-                <div className="article-image-wrapper">
-                  <img src={art.image} alt={art.title} className="article-image" />
-                  <span className="article-category">Kỹ năng</span>
-                </div>
-                <div className="article-body">
-                  <div className="article-meta">
-                    <span className="article-author">👤 {art.author}</span>
-                    <span className="article-date">📅 {art.date}</span>
+            {(featuredArticles.length > 0 ? featuredArticles : (loadingArticles ? [] : fallbackArticles)).map((art) => {
+              const rawImage = art.coverImage || art.cover_image || art.cover || art.thumbnail || art.image || art.imageUrl || art.photoUrl;
+              const articleImage = (typeof rawImage === 'string' && rawImage.trim() !== '')
+                ? rawImage.trim()
+                : DEFAULT_ARTICLE_COVER;
+              const articleAuthor = art.authorName || art.author || 'Safe School';
+              const articleDate = art.createdAt ? formatDisplayDate(art.createdAt) : (art.date || '');
+              const articleDesc = art.summary || (art.content ? (art.content.replace(/<[^>]+>/g, '').slice(0, 140) + '...') : '') || art.desc || '';
+              const articleCategory = art.category || 'Kỹ năng';
+
+              return (
+                <article key={art.id} className="article-card">
+                  <div className="article-image-wrapper">
+                    <img
+                      src={articleImage}
+                      alt={art.title || 'Bài viết chất lượng Safe School'}
+                      className="article-image"
+                      onError={(e) => {
+                        if (e.currentTarget.src !== DEFAULT_ARTICLE_COVER) {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = DEFAULT_ARTICLE_COVER;
+                        }
+                      }}
+                      loading="lazy"
+                    />
+                    <span className="article-category">{articleCategory}</span>
                   </div>
-                  <h3 className="article-card-title">{art.title}</h3>
-                  <p className="article-card-desc">{art.desc}</p>
-                  <Link to={`/articles/${art.id}`} className="article-btn-more">
-                    Xem thêm
-                    <svg className="arrow-icon" viewBox="0 0 24 24" fill="none">
-                      <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </Link>
-                </div>
-              </article>
-            ))}
+                  <div className="article-body">
+                    <div className="article-meta">
+                      <span className="article-author">👤 {articleAuthor}</span>
+                      <span className="article-date">📅 {articleDate}</span>
+                    </div>
+                    <h3 className="article-card-title">{art.title}</h3>
+                    <p className="article-card-desc">{articleDesc}</p>
+                    <Link to={`/articles/${art.id}`} className="article-btn-more">
+                      Xem thêm
+                      <svg className="arrow-icon" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -276,16 +352,147 @@ export default function Home() {
               </p>
             </div>
             <div className="cta-banner-actions">
-              <Link to="/sos" className="btn btn-danger">
-                🚨 Gửi báo cáo khẩn cấp (SOS)
+              <Link to="/reports" className="btn btn-report-now" style={{ backgroundColor: '#ffffff', color: '#1e3c72 !important', boxShadow: '0 4px 14px rgba(0,0,0,0.15)' }}>
+                📢 Báo cáo ngay
               </Link>
-              <a href="tel:111" className="btn btn-secondary-white">
-                📞 Gọi Tổng đài bảo vệ trẻ em 111
-              </a>
+              <Link to="/sos" className="btn btn-danger">
+                🚨 Báo cáo khẩn cấp (SOS)
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowHotlineModal(true)}
+                className="btn btn-secondary-white"
+                style={{ cursor: 'pointer', border: 'none' }}
+              >
+                📞 Tổng đài bảo vệ trẻ em 111
+              </button>
             </div>
           </div>
         </div>
       </section>
+
+      {/* ── Hotline 111 Interactive Modal ── */}
+      {showHotlineModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => setShowHotlineModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '460px',
+              width: '100%',
+              padding: '28px 24px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              position: 'relative',
+              textAlign: 'center',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowHotlineModal(false)}
+              style={{
+                position: 'absolute',
+                top: '14px',
+                right: '16px',
+                border: 'none',
+                background: 'none',
+                fontSize: '1.5rem',
+                cursor: 'pointer',
+                color: '#64748b',
+                lineHeight: 1,
+              }}
+            >
+              &times;
+            </button>
+
+            <div style={{ fontSize: '2.8rem', marginBottom: '6px' }}>📞</div>
+
+            <h3 style={{ margin: '0 0 6px 0', fontSize: '1.25rem', color: '#0f172a', fontWeight: '700' }}>
+              Tổng Đài Quốc Gia Bảo Vệ Trẻ Em
+            </h3>
+
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#dcfce7', color: '#15803d', padding: '4px 12px', borderRadius: '999px', fontSize: '0.8rem', fontWeight: '600', marginBottom: '16px' }}>
+              <span>●</span> Trực 24/7 - Miễn phí 100% cước gọi
+            </div>
+
+            {/* Main Phone Call Card */}
+            <div style={{ backgroundColor: '#eff6ff', border: '2px solid #bfdbfe', borderRadius: '12px', padding: '16px', marginBottom: '18px' }}>
+              <div style={{ fontSize: '2.4rem', fontWeight: '800', color: '#1d4ed8', letterSpacing: '2px', lineHeight: '1.1' }}>
+                111
+              </div>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.825rem', color: '#475569' }}>
+                Đầu số điện thoại quốc gia ứng phó khẩn cấp và bảo vệ an toàn cho trẻ em
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+              <a
+                href="tel:111"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  padding: '12px 20px',
+                  borderRadius: '10px',
+                  fontWeight: '700',
+                  fontSize: '0.95rem',
+                  textDecoration: 'none',
+                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                <span>📞</span> Gọi Ngay 111 (Miễn phí)
+              </a>
+
+              <button
+                onClick={handleCopyHotline}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  backgroundColor: copied ? '#f0fdf4' : '#f8fafc',
+                  border: copied ? '1px solid #86efac' : '1px solid #cbd5e1',
+                  color: copied ? '#16a34a' : '#334155',
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  fontWeight: '600',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <span>{copied ? '✅' : '📋'}</span> {copied ? 'Đã sao chép số 111!' : 'Sao chép số điện thoại 111'}
+              </button>
+            </div>
+
+            <p style={{ margin: '0', fontSize: '0.78rem', color: '#94a3b8' }}>
+              Các đầu số khẩn cấp khác: <strong>113</strong> (Cảnh sát) | <strong>115</strong> (Cấp cứu y tế)
+            </p>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -77,7 +77,34 @@ export default function Profile() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showDeleteModal]);
 
-  // Fetch user data from Firestore
+  // Role labels display mapping helper
+  const ROLE_DISPLAY_MAP = {
+    admin: 'Admin',
+    user: 'User',
+    student: 'Học sinh',
+    teacher: 'Giáo viên',
+    parent: 'Phụ huynh',
+    expert: 'Chuyên gia',
+    psychologist: 'Chuyên gia',
+    counselor: 'Chuyên gia',
+    moderator: 'Kiểm duyệt viên',
+  };
+
+  const formatRoleName = (role) => {
+    if (!role) return 'Học sinh';
+    const cleanRole = String(role).trim();
+    const lowerRole = cleanRole.toLowerCase();
+
+    if (lowerRole === 'anonymous') return 'Học sinh';
+    if (ROLE_DISPLAY_MAP[lowerRole]) {
+      return ROLE_DISPLAY_MAP[lowerRole];
+    }
+
+    // Capitalize first letter if unknown role
+    return cleanRole.charAt(0).toUpperCase() + cleanRole.slice(1);
+  };
+
+  // Real-time listener for user data from Firestore
   useEffect(() => {
     if (authLoading) return;
     if (!targetUid) {
@@ -85,14 +112,17 @@ export default function Profile() {
       return;
     }
 
-    const fetchUserData = async () => {
-      try {
-        setLoading(true);
-        const userDoc = await getDoc(doc(db, 'users', targetUid));
+    setLoading(true);
+    const userDocRef = doc(db, 'users', targetUid);
+
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      (userDoc) => {
         if (userDoc.exists()) {
           const data = userDoc.data();
           const isUserAnonymous = data.is_anonymous || false;
           const showAsAnonymous = isUserAnonymous && !isOwner;
+          const roleFormatted = showAsAnonymous ? 'Học sinh ẩn danh' : formatRoleName(data.role);
 
           const loadedData = {
             avatar: showAsAnonymous ? '' : (data.avatarUrl || ''),
@@ -102,21 +132,25 @@ export default function Profile() {
             dob: showAsAnonymous ? '******' : (data.dob || ''),
             gender: showAsAnonymous ? 'Ẩn' : (data.gender || 'Nam'),
             address: showAsAnonymous ? '******' : (data.address || ''),
-            role: showAsAnonymous ? 'Học sinh ẩn danh' : (data.role === 'teacher' ? 'Giáo viên' : data.role === 'parent' ? 'Phụ huynh' : data.role === 'psychologist' ? 'Chuyên gia' : 'Học sinh'),
+            role: roleFormatted,
             createdAt: showAsAnonymous ? '******' : (data.createdAt
               ? (data.createdAt.seconds
                 ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('vi-VN')
-                : new Date().toLocaleDateString('vi-VN'))
+                : (typeof data.createdAt.toDate === 'function'
+                  ? data.createdAt.toDate().toLocaleDateString('vi-VN')
+                  : new Date().toLocaleDateString('vi-VN')))
               : new Date().toLocaleDateString('vi-VN')),
             hidePhone: data.hidePhone || false,
             hideAddress: data.hideAddress || false,
             isAnonymous: isUserAnonymous
           };
+
           setUserData(loadedData);
-          setFormData(loadedData);
+          setFormData((prev) => (isEditing ? { ...prev, role: roleFormatted } : loadedData));
         } else {
           // Fallback if target user is current user
           if (targetUid === currentUser?.uid) {
+            const roleFormatted = formatRoleName(currentUser.role);
             const loadedData = {
               avatar: currentUser.avatarUrl || '',
               fullName: currentUser.displayName || 'Chưa đặt tên',
@@ -125,7 +159,7 @@ export default function Profile() {
               dob: '',
               gender: 'Nam',
               address: '',
-              role: currentUser.role === 'teacher' ? 'Giáo viên' : currentUser.role === 'parent' ? 'Phụ huynh' : currentUser.role === 'psychologist' ? 'Chuyên gia' : 'Học sinh',
+              role: roleFormatted,
               createdAt: new Date().toLocaleDateString('vi-VN'),
               hidePhone: false,
               hideAddress: false,
@@ -137,15 +171,19 @@ export default function Profile() {
             alert('Không tìm thấy thông tin người dùng này trong hệ thống.');
           }
         }
-      } catch (error) {
-        console.error('Lỗi khi tải thông tin người dùng:', error);
-      } finally {
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Lỗi khi lắng nghe thông tin người dùng:', error);
         setLoading(false);
       }
-    };
+    );
 
-    fetchUserData();
-  }, [targetUid, currentUser, authLoading]);
+    // Cleanup real-time listener when unmounting, changing target user or logging out
+    return () => {
+      unsubscribe();
+    };
+  }, [targetUid, currentUser, authLoading, isOwner]);
 
   // Real-time activity stats — count interactions the user has PERFORMED
   useEffect(() => {

@@ -22,11 +22,45 @@ const Dashboard = () => {
     try {
       if (isManual) setLoading(true);
       setError(null);
-      const res = await getStatistics();
+      const res = await getStatistics().catch(() => null);
       if (res && res.data) {
         setStats(res.data);
         if (isManual) {
           setToast({ message: 'Đã cập nhật dữ liệu mới nhất!', type: 'success' });
+        }
+      } else {
+        // Fallback from Firestore
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
+        const { db } = await import('../../firebase/config');
+
+        const [usersSnap, postsSnap, reportsSnap] = await Promise.all([
+          getDocs(collection(db, 'users')).catch(() => ({ size: 0, docs: [] })),
+          getDocs(query(collection(db, 'articles'), where('isDeleted', '!=', true))).catch(() => ({ size: 0, docs: [] })),
+          getDocs(collection(db, 'reports')).catch(() => ({ size: 0, docs: [] }))
+        ]);
+
+        const pendingPosts = postsSnap.docs.filter(d => (d.data().status || 'pending') === 'pending').length;
+        const pendingReports = reportsSnap.docs.filter(d => {
+          const s = String(d.data().status || 'pending').toLowerCase();
+          return s === 'pending' || s === 'mới' || s.includes('chưa xử lý');
+        }).length;
+        const sosReports = reportsSnap.docs.filter(d => {
+          const p = String(d.data().priority || '').toLowerCase();
+          const t = String(d.data().type || '').toLowerCase();
+          return p === 'sos' || p === 'khẩn cấp' || t.includes('sos');
+        }).length;
+
+        setStats({
+          users: usersSnap.size || 0,
+          posts: postsSnap.size || 0,
+          reports: reportsSnap.size || 0,
+          pendingReports,
+          pendingPosts,
+          sosReports,
+        });
+
+        if (isManual) {
+          setToast({ message: 'Đã cập nhật dữ liệu mới nhất từ Firestore!', type: 'success' });
         }
       }
     } catch (err) {
