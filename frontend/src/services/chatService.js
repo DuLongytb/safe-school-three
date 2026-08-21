@@ -13,6 +13,7 @@ import {
   onSnapshot,
   serverTimestamp,
   arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
@@ -23,6 +24,7 @@ export const ROOM_TYPES = {
   CONSULTATION: 'consultation',   // Expert creates from registration list
   STUDENT_GROUP: 'student_group', // Student creates group with other students
   TEACHER_ONLY: 'teacher_only',   // Default teacher-only room
+  DIRECT: 'direct',               // 1-on-1 direct chat
   GENERAL: 'general',             // General room (legacy)
 };
 
@@ -203,6 +205,45 @@ export async function createStudentGroup({ title, creatorId, creatorName, invite
   });
 }
 
+/**
+ * Find an existing 1-on-1 direct chat room between two users or create a new one.
+ */
+export async function getOrCreateDirectChatRoom({ currentUserId, currentUserName, currentUserRole, targetUserId, targetUserName }) {
+  if (!currentUserId || !targetUserId) {
+    throw new Error('Thiếu thông tin người dùng để tạo đoạn chat');
+  }
+
+  // 1. Check if a direct room already exists between these 2 users
+  const q = query(
+    collection(db, ROOMS_COLLECTION),
+    where('type', '==', ROOM_TYPES.DIRECT),
+    where('participantIds', 'array-contains', currentUserId)
+  );
+
+  const snap = await getDocs(q);
+  const existingDoc = snap.docs.find((d) => {
+    const pIds = d.data().participantIds || [];
+    return pIds.includes(targetUserId);
+  });
+
+  if (existingDoc) {
+    return existingDoc.id;
+  }
+
+  // 2. Create new direct room
+  const title = `Chat: ${currentUserName || 'Người dùng'} & ${targetUserName || 'Người dùng'}`;
+  const roomId = await createChatRoom({
+    title,
+    userId: currentUserId,
+    userName: currentUserName || 'Người dùng',
+    userRole: currentUserRole || 'student',
+    type: ROOM_TYPES.DIRECT,
+    invitedUserIds: [targetUserId],
+  });
+
+  return roomId;
+}
+
 export async function joinChatRoom(roomId, userId, userRole = 'student') {
   const roomRef = doc(db, ROOMS_COLLECTION, roomId);
   const roomSnap = await getDoc(roomRef);
@@ -299,6 +340,24 @@ export async function getUserPresence(userId) {
 
 export async function deleteChatRoom(roomId) {
   await deleteDoc(doc(db, ROOMS_COLLECTION, roomId));
+}
+
+/**
+ * Pin or unpin a chat room for a specific user.
+ * Adds/removes the user's ID in `pinnedUserIds` on the room document.
+ */
+export async function togglePinRoom(roomId, userId, isPinned) {
+  if (!roomId || !userId) return;
+  const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+  if (isPinned) {
+    await updateDoc(roomRef, {
+      pinnedUserIds: arrayRemove(userId),
+    });
+  } else {
+    await updateDoc(roomRef, {
+      pinnedUserIds: arrayUnion(userId),
+    });
+  }
 }
 
 /**

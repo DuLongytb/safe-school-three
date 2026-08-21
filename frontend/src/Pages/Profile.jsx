@@ -540,6 +540,34 @@ export default function Profile() {
     ? (isEditing ? formData.address : userData.address)
     : (userData.hideAddress ? '****** (Đã ẩn)' : userData.address);
 
+  const [creatingChat, setCreatingChat] = useState(false);
+
+  const handleCreatePrivateChat = async () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    if (!targetUid || targetUid === currentUser.uid) return;
+
+    try {
+      setCreatingChat(true);
+      const { getOrCreateDirectChatRoom } = await import('../services/chatService');
+      const roomId = await getOrCreateDirectChatRoom({
+        currentUserId: currentUser.uid,
+        currentUserName: currentUser.displayName || currentUser.DisplayName || currentUser.email || 'Người dùng',
+        currentUserRole: currentUser.role || 'student',
+        targetUserId: targetUid,
+        targetUserName: userData.fullName || 'Người dùng',
+      });
+      navigate(`/chat?roomId=${roomId}&tab=direct`);
+    } catch (err) {
+      console.error('Lỗi tạo chat riêng:', err);
+      alert('Không thể tạo đoạn chat riêng: ' + (err.message || 'Vui lòng thử lại.'));
+    } finally {
+      setCreatingChat(false);
+    }
+  };
+
   return (
     <div className="profile-page fade-in">
       <div className="container profile-container">
@@ -585,13 +613,22 @@ export default function Profile() {
               </h2>
               <span className="profile-role-badge">🏷️ {userData.role}</span>
               <p className="profile-meta-text">Tài khoản được tạo ngày: {userData.createdAt}</p>
-
-
-
             </div>
           </div>
 
           <div className="profile-header-actions">
+            {!isOwner && currentUser && (
+              <button
+                type="button"
+                className="btn btn-chat-private"
+                onClick={handleCreatePrivateChat}
+                disabled={creatingChat}
+                title={`Nhắn tin riêng với ${userData.fullName}`}
+              >
+                {creatingChat ? '⏳ Đang mở chat...' : '💬 Tạo chat riêng'}
+              </button>
+            )}
+
             {isOwner && (
               !isEditing ? (
                 <button className="btn btn-primary" onClick={() => setIsEditing(true)}>

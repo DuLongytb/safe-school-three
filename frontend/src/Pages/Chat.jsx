@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase/config';
@@ -12,6 +12,7 @@ import {
   subscribeToMessages,
   createExpertRoom,
   createStudentGroup,
+  getOrCreateDirectChatRoom,
   joinChatRoom,
   sendMessage,
   closeChatRoom,
@@ -19,6 +20,7 @@ import {
   formatTimestamp,
   fetchUsers,
   ensureTeacherRoom,
+  togglePinRoom,
   ROOM_TYPES,
   TEACHER_ROOM_ID,
 } from '../services/chatService';
@@ -55,6 +57,7 @@ function getRoleBadge(role) {
 
 function getTabs(userRole) {
   const tabs = [];
+  tabs.push({ id: 'direct', label: '💬 Chat riêng (1-1)', icon: '💬' });
   if (userRole === 'expert' || userRole === 'admin') {
     tabs.push({ id: 'expert', label: '📋 Tư vấn (Chuyên gia)', icon: '📋' });
   }
@@ -65,13 +68,13 @@ function getTabs(userRole) {
     tabs.push({ id: 'student', label: '🧑‍🤝‍🧑 Nhóm Học Sinh', icon: '🧑‍🤝‍🧑' });
   }
   // Consultation rooms visible to all (students can see rooms they're invited to)
-  tabs.push({ id: 'my', label: '💬 Phòng của tôi', icon: '💬' });
+  tabs.push({ id: 'my', label: '📂 Phòng tư vấn của tôi', icon: '📂' });
   return tabs;
 }
 
 // ─── Message Area sub-component ───────────────────────────────────────────────
 
-function MessageArea({ selectedRoom, messages, messageText, setMessageText, sending, onSend, onKeyDown, user, onCloseRoom }) {
+function MessageArea({ selectedRoom, messages, messageText, setMessageText, sending, onSend, onKeyDown, user, onCloseRoom, onTogglePin }) {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -126,6 +129,7 @@ function MessageArea({ selectedRoom, messages, messageText, setMessageText, send
   const isClosed = selectedRoom?.status === 'closed';
   const isOwner = selectedRoom?.createdBy === user?.uid;
   const isAdmin = user?.role === 'admin';
+  const isPinned = selectedRoom?.pinnedUserIds?.includes(user?.uid);
 
   if (!selectedRoom) {
     return (
@@ -155,6 +159,17 @@ function MessageArea({ selectedRoom, messages, messageText, setMessageText, send
             </div>
           </div>
           <div className="chat-header-actions">
+            {onTogglePin && (
+              <button
+                type="button"
+                className={`btn-pin-toggle ${isPinned ? 'active' : ''}`}
+                onClick={() => onTogglePin(selectedRoom.id, isPinned)}
+                title={isPinned ? 'Bỏ ghim phòng này' : 'Ghim phòng này lên đầu'}
+              >
+                📌 {isPinned ? 'Đã ghim' : 'Ghim'}
+              </button>
+            )}
+
             <button
               type="button"
               className={`btn-members-toggle ${showMembersPanel ? 'active' : ''}`}
@@ -320,7 +335,18 @@ function MessageArea({ selectedRoom, messages, messageText, setMessageText, send
 
 // ─── Room Sidebar sub-component ───────────────────────────────────────────────
 
-function RoomSidebar({ rooms, selectedRoomId, onSelectRoom, onCreateRoom, createLabel, createDisabled }) {
+function RoomSidebar({ rooms, selectedRoomId, onSelectRoom, onCreateRoom, createLabel, createDisabled, userId, onTogglePin }) {
+  const sortedRooms = React.useMemo(() => {
+    return [...rooms].sort((a, b) => {
+      const aPinned = a.pinnedUserIds?.includes(userId) ? 1 : 0;
+      const bPinned = b.pinnedUserIds?.includes(userId) ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      const aTime = a.lastMessageAt?.toMillis?.() || (a.lastMessageAt?.seconds ? a.lastMessageAt.seconds * 1000 : 0);
+      const bTime = b.lastMessageAt?.toMillis?.() || (b.lastMessageAt?.seconds ? b.lastMessageAt.seconds * 1000 : 0);
+      return bTime - aTime;
+    });
+  }, [rooms, userId]);
+
   return (
     <aside className="chat-sidebar">
       <div className="chat-sidebar-header">
@@ -336,30 +362,51 @@ function RoomSidebar({ rooms, selectedRoomId, onSelectRoom, onCreateRoom, create
         )}
       </div>
       <div className="room-list">
-        {rooms.length === 0 ? (
+        {sortedRooms.length === 0 ? (
           <div className="room-empty">
             <p>Chưa có phòng chat nào.</p>
             {onCreateRoom && <p>Nhấn &quot;Tạo phòng&quot; để bắt đầu!</p>}
           </div>
         ) : (
-          rooms.map((room) => (
-            <div
-              key={room.id}
-              className={`room-item ${selectedRoomId === room.id ? 'active' : ''}`}
-              onClick={() => onSelectRoom(room)}
-            >
-              <div className="room-item-title">{room.title}</div>
-              <div className="room-item-meta">
-                <span>{room.createdByName}</span>
-                <span className={`room-status ${room.status}`}>
-                  {room.status === 'open' ? '● Mở' : '● Đóng'}
-                </span>
+          sortedRooms.map((room) => {
+            const isPinned = room.pinnedUserIds?.includes(userId);
+            return (
+              <div
+                key={room.id}
+                className={`room-item ${selectedRoomId === room.id ? 'active' : ''} ${isPinned ? 'pinned' : ''}`}
+                onClick={() => onSelectRoom(room)}
+              >
+                <div className="room-item-header-row">
+                  <div className="room-item-title" title={room.title}>
+                    {isPinned && <span className="pinned-badge-icon" title="Đã ghim">📌</span>}
+                    {room.title}
+                  </div>
+                  {onTogglePin && (
+                    <button
+                      type="button"
+                      className={`btn-room-pin-action ${isPinned ? 'is-pinned' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTogglePin(room.id, isPinned);
+                      }}
+                      title={isPinned ? 'Bỏ ghim phòng này' : 'Ghim phòng này lên đầu'}
+                    >
+                      📌
+                    </button>
+                  )}
+                </div>
+                <div className="room-item-meta">
+                  <span>{room.createdByName}</span>
+                  <span className={`room-status ${room.status}`}>
+                    {room.status === 'open' ? '● Mở' : '● Đóng'}
+                  </span>
+                </div>
+                {room.lastMessage && (
+                  <div className="room-item-preview">{room.lastMessage}</div>
+                )}
               </div>
-              {room.lastMessage && (
-                <div className="room-item-preview">{room.lastMessage}</div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </aside>
@@ -492,6 +539,15 @@ function ExpertTab({ user, onToast }) {
     }
   };
 
+  const handleTogglePin = async (roomId, isPinned) => {
+    try {
+      await togglePinRoom(roomId, user.uid, isPinned);
+      onToast(isPinned ? 'Đã bỏ ghim phòng chat.' : 'Đã ghim phòng chat lên đầu!', 'success');
+    } catch (err) {
+      onToast('Lỗi khi ghim phòng: ' + err.message, 'error');
+    }
+  };
+
   return (
     <div className="chat-layout">
       {/* Create Room Modal */}
@@ -594,6 +650,8 @@ function ExpertTab({ user, onToast }) {
         onSelectRoom={handleSelectRoom}
         onCreateRoom={openCreateModal}
         createLabel="Tạo phòng tư vấn"
+        userId={user?.uid}
+        onTogglePin={handleTogglePin}
       />
 
       <section className="chat-main">
@@ -607,6 +665,7 @@ function ExpertTab({ user, onToast }) {
           onKeyDown={handleKeyDown}
           user={user}
           onCloseRoom={() => setShowCloseModal(true)}
+          onTogglePin={handleTogglePin}
         />
       </section>
     </div>
@@ -830,6 +889,15 @@ function StudentTab({ user, onToast }) {
     }
   };
 
+  const handleTogglePin = async (roomId, isPinned) => {
+    try {
+      await togglePinRoom(roomId, user.uid, isPinned);
+      onToast(isPinned ? 'Đã bỏ ghim nhóm chat.' : 'Đã ghim nhóm chat lên đầu!', 'success');
+    } catch (err) {
+      onToast('Lỗi khi ghim nhóm: ' + err.message, 'error');
+    }
+  };
+
   return (
     <div className="chat-layout">
       {/* Create Group Modal */}
@@ -919,6 +987,8 @@ function StudentTab({ user, onToast }) {
         onSelectRoom={handleSelectRoom}
         onCreateRoom={openCreateModal}
         createLabel="Tạo nhóm"
+        userId={user?.uid}
+        onTogglePin={handleTogglePin}
       />
 
       <section className="chat-main">
@@ -932,6 +1002,7 @@ function StudentTab({ user, onToast }) {
           onKeyDown={handleKeyDown}
           user={user}
           onCloseRoom={() => setShowCloseModal(true)}
+          onTogglePin={handleTogglePin}
         />
       </section>
     </div>
@@ -1020,6 +1091,15 @@ function MyRoomsTab({ user, onToast }) {
     }
   };
 
+  const handleTogglePin = async (roomId, isPinned) => {
+    try {
+      await togglePinRoom(roomId, user.uid, isPinned);
+      onToast(isPinned ? 'Đã bỏ ghim phòng chat.' : 'Đã ghim phòng chat lên đầu!', 'success');
+    } catch (err) {
+      onToast('Lỗi khi ghim phòng: ' + err.message, 'error');
+    }
+  };
+
   return (
     <div className="chat-layout">
       <Modal
@@ -1038,6 +1118,8 @@ function MyRoomsTab({ user, onToast }) {
         selectedRoomId={selectedRoomId}
         onSelectRoom={handleSelectRoom}
         onCreateRoom={null}
+        userId={user?.uid}
+        onTogglePin={handleTogglePin}
       />
 
       <section className="chat-main">
@@ -1051,6 +1133,265 @@ function MyRoomsTab({ user, onToast }) {
           onKeyDown={handleKeyDown}
           user={user}
           onCloseRoom={() => setShowCloseModal(true)}
+          onTogglePin={handleTogglePin}
+        />
+      </section>
+    </div>
+  );
+}
+
+// ─── Direct (1-on-1) Chat Tab ──────────────────────────────────────────────────
+
+function DirectTab({ user, onToast, initialRoomId }) {
+  const [rooms, setRooms] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState(initialRoomId || null);
+  const [messages, setMessages] = useState([]);
+  const [messageText, setMessageText] = useState('');
+  const [sending, setSending] = useState(false);
+
+  // New Direct Chat Modal
+  const [showCreate, setShowCreate] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const selectedRoom = rooms.find((r) => r.id === selectedRoomId);
+
+  useEffect(() => {
+    if (initialRoomId) {
+      setSelectedRoomId(initialRoomId);
+    }
+  }, [initialRoomId]);
+
+  useEffect(() => {
+    const unsub = subscribeToRoomsByType(ROOM_TYPES.DIRECT, (data) => {
+      setRooms(data.filter((r) => r.participantIds?.includes(user.uid)));
+    });
+    return unsub;
+  }, [user.uid]);
+
+  useEffect(() => {
+    if (!selectedRoomId) { setMessages([]); return undefined; }
+    const unsub = subscribeToMessages(selectedRoomId, setMessages);
+    return unsub;
+  }, [selectedRoomId]);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    updateUserPresence(user.uid, selectedRoomId || null);
+    return () => { updateUserPresence(user.uid, null); };
+  }, [user?.uid, selectedRoomId]);
+
+  const openCreateModal = async () => {
+    setUserSearchQuery('');
+    setUserRoleFilter('all');
+    setShowCreate(true);
+    setUsersLoading(true);
+    try {
+      const users = await fetchUsers();
+      setAllUsers(users.filter((u) => u.id !== user.uid));
+    } catch {
+      onToast('Không thể tải danh sách người dùng', 'error');
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const handleStartDirectChat = async (targetUser) => {
+    try {
+      const roomId = await getOrCreateDirectChatRoom({
+        currentUserId: user.uid,
+        currentUserName: user.displayName || user.DisplayName || user.email || 'Người dùng',
+        currentUserRole: user.role || 'student',
+        targetUserId: targetUser.id,
+        targetUserName: targetUser.displayName || targetUser.DisplayName || targetUser.email || 'Người dùng',
+      });
+      setShowCreate(false);
+      setSelectedRoomId(roomId);
+      onToast(`Đã mở cuộc trò chuyện với ${targetUser.displayName || targetUser.DisplayName || targetUser.email}!`, 'success');
+    } catch (err) {
+      onToast('Lỗi mở chat: ' + err.message, 'error');
+    }
+  };
+
+  const handleSelectRoom = async (room) => {
+    try {
+      await joinChatRoom(room.id, user.uid, user.role || 'student');
+      setSelectedRoomId(room.id);
+    } catch (err) {
+      onToast(err.message, 'error');
+    }
+  };
+
+  const handleSend = async () => {
+    if (!messageText.trim() || !selectedRoomId) return;
+    setSending(true);
+    try {
+      await sendMessage({
+        roomId: selectedRoomId,
+        senderId: user.uid,
+        senderName: user.displayName || user.DisplayName || 'Người dùng',
+        senderRole: user.role || 'student',
+        text: messageText,
+      });
+      setMessageText('');
+    } catch (err) {
+      onToast(err.message, 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const handleCloseRoom = async () => {
+    try {
+      await closeChatRoom(selectedRoomId, user.displayName || 'Người dùng');
+      setShowCloseModal(false);
+      setSelectedRoomId(null);
+      onToast('Đã đóng cuộc trò chuyện.', 'success');
+    } catch (err) {
+      onToast(err.message, 'error');
+    }
+  };
+
+  const handleTogglePin = async (roomId, isPinned) => {
+    try {
+      await togglePinRoom(roomId, user.uid, isPinned);
+      onToast(isPinned ? 'Đã bỏ ghim cuộc trò chuyện.' : 'Đã ghim cuộc trò chuyện lên đầu!', 'success');
+    } catch (err) {
+      onToast('Lỗi khi ghim: ' + err.message, 'error');
+    }
+  };
+
+  const filteredUsers = allUsers.filter((u) => {
+    const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+    const name = (u.displayName || u.DisplayName || u.email || '').toLowerCase();
+    const matchesQuery = !userSearchQuery.trim() || name.includes(userSearchQuery.toLowerCase());
+    return matchesRole && matchesQuery;
+  });
+
+  return (
+    <div className="chat-layout">
+      {/* Start Direct Chat Modal */}
+      {showCreate && (
+        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
+          <div className="create-room-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>💬 Tạo đoạn chat riêng (1-1)</h3>
+              <button className="modal-close" onClick={() => setShowCreate(false)}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              <p className="form-desc">
+                Chọn người dùng bạn muốn nhắn tin trực tiếp:
+              </p>
+
+              <input
+                type="search"
+                className="form-input"
+                placeholder="Tìm kiếm theo tên hoặc email..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                autoFocus
+              />
+
+              <div className="user-filter-tabs">
+                {['all', 'student', 'teacher', 'expert', 'parent'].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className={`filter-tab ${userRoleFilter === r ? 'active' : ''}`}
+                    onClick={() => setUserRoleFilter(r)}
+                  >
+                    {r === 'all' ? 'Tất cả' : ROLE_LABELS[r] || r}
+                  </button>
+                ))}
+              </div>
+
+              {usersLoading ? (
+                <div className="loading-users">Đang tải danh sách người dùng...</div>
+              ) : (
+                <div className="user-pick-list" style={{ maxHeight: '300px' }}>
+                  {filteredUsers.length === 0 ? (
+                    <p className="no-users">Không tìm thấy người dùng phù hợp.</p>
+                  ) : (
+                    filteredUsers.map((u) => {
+                      const uName = u.displayName || u.DisplayName || u.email || 'Người dùng';
+                      return (
+                        <div
+                          key={u.id}
+                          className="user-pick-item"
+                          style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                          onClick={() => handleStartDirectChat(u)}
+                        >
+                          <div className="user-pick-info">
+                            <Avatar src={u.avatarUrl || u.avatar || ''} alt={uName} style={{ width: 32, height: 32 }} />
+                            <div>
+                              <div className="user-pick-name">{uName}</div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--gray-text)' }}>{u.email}</span>
+                            </div>
+                            {getRoleBadge(u.role)}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-view-profile"
+                            style={{ background: 'var(--primary-light)', color: '#ffffff', border: 'none' }}
+                          >
+                            Nhắn tin
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              <div className="modal-footer">
+                <button className="btn-modal-cancel" onClick={() => setShowCreate(false)}>Hủy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Modal
+        isOpen={showCloseModal}
+        title="Đóng cuộc trò chuyện"
+        message={`Bạn có chắc muốn đóng cuộc trò chuyện "${selectedRoom?.title}"?`}
+        variant="danger"
+        confirmText="Đóng"
+        cancelText="Hủy"
+        onConfirm={handleCloseRoom}
+        onCancel={() => setShowCloseModal(false)}
+      />
+
+      <RoomSidebar
+        rooms={rooms}
+        selectedRoomId={selectedRoomId}
+        onSelectRoom={handleSelectRoom}
+        onCreateRoom={openCreateModal}
+        createLabel="Tạo chat riêng"
+        userId={user?.uid}
+        onTogglePin={handleTogglePin}
+      />
+
+      <section className="chat-main">
+        <MessageArea
+          selectedRoom={selectedRoom}
+          messages={messages}
+          messageText={messageText}
+          setMessageText={setMessageText}
+          sending={sending}
+          onSend={handleSend}
+          onKeyDown={handleKeyDown}
+          user={user}
+          onCloseRoom={() => setShowCloseModal(true)}
+          onTogglePin={handleTogglePin}
         />
       </section>
     </div>
@@ -1061,18 +1402,25 @@ function MyRoomsTab({ user, onToast }) {
 
 export default function Chat() {
   const { user } = useAuth();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const paramRoomId = queryParams.get('roomId');
+  const paramTab = queryParams.get('tab');
+
   const [toast, setToast] = useState({ message: '', type: 'info' });
-  const [activeTab, setActiveTab] = useState(null);
+  const [activeTab, setActiveTab] = useState(paramTab || null);
 
   const userRole = user?.role || 'student';
   const tabs = getTabs(userRole);
 
   // Set default tab
   useEffect(() => {
-    if (tabs.length > 0 && !activeTab) {
+    if (paramTab) {
+      setActiveTab(paramTab);
+    } else if (tabs.length > 0 && !activeTab) {
       setActiveTab(tabs[0].id);
     }
-  }, [userRole]);
+  }, [userRole, paramTab]);
 
   const handleToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -1112,6 +1460,9 @@ export default function Chat() {
 
         {/* Tab Content */}
         <div className="chat-tab-content">
+          {activeTab === 'direct' && (
+            <DirectTab user={user} onToast={handleToast} initialRoomId={paramRoomId} />
+          )}
           {activeTab === 'expert' && (userRole === 'expert' || userRole === 'admin') && (
             <ExpertTab user={user} onToast={handleToast} />
           )}
