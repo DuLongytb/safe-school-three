@@ -153,6 +153,7 @@ export default function NotificationSettings() {
 
   const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
+  const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const [activePreview, setActivePreview] = useState({
     id: 'sos_alert',
     name: 'Cảnh báo S.O.S khẩn cấp',
@@ -280,7 +281,7 @@ export default function NotificationSettings() {
       targetUrl: activePreview.id === 'sos_alert' ? '/admin/reports-sos' : '/notifications',
     });
 
-    showToast(`🔔 Đã kích hoạt Push Toast Antigravity: "${activePreview.name}"`);
+    showToast(`🔔 Kích hoạt Push Toast: "${activePreview.name}"`);
   };
 
   if (loading) {
@@ -435,7 +436,7 @@ export default function NotificationSettings() {
               </label>
             </div>
             <div className="settings-box">
-              <p style={{ fontSize: '0.9rem', color: '#64748b', margin: 0 }}>
+              <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
                 Trong khoảng thời gian này, hệ thống sẽ tự động tạm hoãn gửi thông báo đẩy (Push) để không làm phiền bạn.
               </p>
 
@@ -471,7 +472,7 @@ export default function NotificationSettings() {
                       <span className="toggle-slider critical-slider"></span>
                     </label>
                     <span>
-                      <strong>Cho phép SOS Khẩn cấp ghi đè Giờ yên lặng:</strong> Nhận ngay cảnh báo SOS bạo lực học đường bất kể thời gian (Khuyên dùng cho Cán bộ & Chuyên gia).
+                      <strong>Cho phép SOS Khẩn cấp ghi đè Giờ yên lặng:</strong> Nhận ngay cảnh báo SOS bạo lực học đường bất kể thời gian.
                     </span>
                   </div>
                 </>
@@ -487,7 +488,7 @@ export default function NotificationSettings() {
               </div>
             </div>
             <div className="settings-box">
-              <p style={{ fontSize: '0.9rem', color: '#64748b', margin: 0 }}>
+              <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
                 Gộp nhiều thông báo tương tác bài viết (Like, Comment) thành 1 bản tin thay vì gửi lẻ tẻ nhiều lần.
               </p>
 
@@ -512,45 +513,50 @@ export default function NotificationSettings() {
           </div>
         </div>
 
-        {/* Right Column: Live Interactive Notification Preview Card */}
+        {/* Right Column: Compact Notification Preview Card */}
         <div className="preview-sidebar">
-          <div className="preview-card">
-            <div className="preview-card-header">
-              <div className="preview-card-title">
-                <span>👁️ Bộ Xem Trước Thẻ Thông Báo</span>
+          <div className={`compact-preview-card ${isPreviewExpanded ? 'expanded' : 'collapsed'}`}>
+            <div className="compact-preview-header">
+              <div className="compact-preview-title">
+                <span>👁️ Xem trước Push</span>
               </div>
-            </div>
-            <div className="preview-body">
-              <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
-                Bấm vào một loại thông báo ở danh sách bên trái để xem trước giao diện hiển thị trên thiết bị.
-              </p>
-
-              <div className="mock-notification">
-                <div className="mock-notif-header">
-                  <div className="mock-notif-appname">
-                    <span className="mock-app-icon">S</span>
-                    SafeSchool App
-                  </div>
-                  <span className="mock-notif-time">Vừa xong</span>
-                </div>
-
-                <div className="mock-notif-title">{activePreview.title}</div>
-                <div className="mock-notif-message">{activePreview.message}</div>
-
-                <div className="mock-channel-tags">
-                  {preferences.channels[activePreview.id]?.in_app && (
-                    <span className="channel-tag in_app">🔔 In-App</span>
-                  )}
-                  {preferences.channels[activePreview.id]?.push && (
-                    <span className="channel-tag push">📱 Push FCM</span>
-                  )}
-                </div>
-              </div>
-
-              <button className="test-push-btn" onClick={handleSendTestNotification}>
-                🔔 Thử nghiệm Push Antigravity (Right-to-Left Toast)
+              <button
+                type="button"
+                className="expand-toggle-btn"
+                aria-expanded={isPreviewExpanded}
+                onClick={() => setIsPreviewExpanded((prev) => !prev)}
+              >
+                {isPreviewExpanded ? '▲ Thu gọn' : '▼ Mở rộng'}
               </button>
             </div>
+            {isPreviewExpanded && (
+              <div className="compact-preview-body">
+                <div className="compact-active-indicator">
+                  <span style={{ color: '#64748b' }}>Đang chọn:</span>
+                  <span className="compact-active-name" title={activePreview.name}>
+                    {activePreview.name}
+                  </span>
+                </div>
+
+                <div className="compact-mock-box">
+                  <div className="compact-mock-title">{activePreview.title}</div>
+                  <div className="compact-mock-msg">{activePreview.message}</div>
+
+                  <div className="mock-channel-tags">
+                    {preferences.channels[activePreview.id]?.in_app && (
+                      <span className="channel-tag in_app">🔔 In-App</span>
+                    )}
+                    {preferences.channels[activePreview.id]?.push && (
+                      <span className="channel-tag push">📱 Push FCM</span>
+                    )}
+                  </div>
+                </div>
+
+                <button className="compact-test-btn" onClick={handleSendTestNotification}>
+                  🔔 Thử nghiệm Push Antigravity
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

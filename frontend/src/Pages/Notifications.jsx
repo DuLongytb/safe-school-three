@@ -271,11 +271,12 @@ export default function Notifications() {
           </div>
           <button
             type="button"
-            className="notifications-filter notifications-filter--active"
+            className="notifications-filter"
             onClick={() => navigate('/settings/notifications')}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.6rem 1.2rem', whiteSpace: 'nowrap' }}
+            title="Cài đặt thông báo"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', padding: '0.5rem 0.9rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
           >
-            ⚙️ Cài đặt thông báo
+            ⚙️ Cài đặt
           </button>
         </header>
 
