@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { db } from '../firebase/config';
+import Avatar from '../components/User/Avatar';
 import Modal from '../components/Common/Modal';
 import Toast from '../components/Common/Toast';
 import {
@@ -68,11 +72,52 @@ function getTabs(userRole) {
 // ─── Message Area sub-component ───────────────────────────────────────────────
 
 function MessageArea({ selectedRoom, messages, messageText, setMessageText, sending, onSend, onKeyDown, user, onCloseRoom }) {
+  const navigate = useNavigate();
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
+  const [showMembersPanel, setShowMembersPanel] = useState(false);
+  const [membersSearchQuery, setMembersSearchQuery] = useState('');
+  const [roomMembers, setRoomMembers] = useState([]);
+
+  // Cuộn xuống cuối mỗi khi có tin nhắn mới hoặc đổi phòng
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, selectedRoom?.id]);
+
+  // Lắng nghe danh sách thành viên của phòng chat theo thời gian thực
+  useEffect(() => {
+    if (!selectedRoom?.participantIds || selectedRoom.participantIds.length === 0) {
+      setRoomMembers([]);
+      return;
+    }
+
+    const usersRef = collection(db, 'users');
+    const unsub = onSnapshot(
+      usersRef,
+      (snapshot) => {
+        const allUsers = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+        const pIds = selectedRoom.participantIds || [];
+        const members = allUsers.filter((u) => pIds.includes(u.id));
+        setRoomMembers(members);
+      },
+      (err) => {
+        console.error('Lỗi lấy thông tin thành viên:', err);
+      }
+    );
+
+    return () => unsub();
+  }, [selectedRoom?.id, JSON.stringify(selectedRoom?.participantIds)]);
+
+  const membersMap = React.useMemo(() => {
+    const map = {};
+    roomMembers.forEach((m) => {
+      map[m.id] = m;
+    });
+    return map;
+  }, [roomMembers]);
 
   const isParticipant = selectedRoom?.participantIds?.includes(user?.uid);
   const isClosed = selectedRoom?.status === 'closed';
@@ -89,80 +134,184 @@ function MessageArea({ selectedRoom, messages, messageText, setMessageText, send
     );
   }
 
+  const filteredMembers = roomMembers.filter((m) => {
+    if (!membersSearchQuery.trim()) return true;
+    const q = membersSearchQuery.toLowerCase();
+    const name = (m.displayName || m.DisplayName || m.email || '').toLowerCase();
+    return name.includes(q);
+  });
+
   return (
-    <>
-      <div className="chat-room-header">
-        <div>
-          <h3>{selectedRoom.title}</h3>
-          <div className="chat-room-header-meta">
-            Tạo bởi {selectedRoom.createdByName} · {selectedRoom.participantIds?.length || 0} thành viên
+    <div className={`chat-main-content-wrapper ${showMembersPanel ? 'has-members-panel' : ''}`}>
+      <div className="chat-main-inner">
+        <div className="chat-room-header">
+          <div>
+            <h3>{selectedRoom.title}</h3>
+            <div className="chat-room-header-meta">
+              Tạo bởi {selectedRoom.createdByName} · {selectedRoom.participantIds?.length || 0} thành viên
+            </div>
+          </div>
+          <div className="chat-header-actions">
+            <button
+              type="button"
+              className={`btn-members-toggle ${showMembersPanel ? 'active' : ''}`}
+              onClick={() => setShowMembersPanel(!showMembersPanel)}
+              title="Xem danh sách thành viên trong phòng"
+            >
+              👥 Thành viên ({selectedRoom.participantIds?.length || 0})
+            </button>
+
+            {(isOwner || isAdmin) && !isClosed && (
+              <button type="button" className="btn-close-room" onClick={onCloseRoom}>
+                🔒 Đóng phòng
+              </button>
+            )}
           </div>
         </div>
-        {(isOwner || isAdmin) && !isClosed && (
-          <button className="btn-close-room" onClick={onCloseRoom}>
-            🔒 Đóng phòng
-          </button>
+
+        <div className="messages-area" ref={messagesContainerRef}>
+          {messages.map((msg) => {
+            const isOwn = msg.senderId === user?.uid;
+            const isSystem = msg.senderRole === 'system';
+            const senderUser = membersMap[msg.senderId];
+            const senderAvatar = senderUser?.avatarUrl || senderUser?.avatar || '';
+            const senderDisplayName = senderUser?.displayName || senderUser?.DisplayName || msg.senderName;
+
+            return (
+              <div
+                key={msg.id}
+                className={`message ${isSystem ? 'system' : isOwn ? 'own' : 'other'}`}
+              >
+                {!isSystem && (
+                  <div className="message-header-line">
+                    {!isOwn && (
+                      <div
+                        className="message-avatar-btn"
+                        onClick={() => navigate(`/profile?uid=${msg.senderId}`)}
+                        title={`Xem trang cá nhân của ${senderDisplayName}`}
+                      >
+                        <Avatar src={senderAvatar} alt={senderDisplayName} style={{ width: 28, height: 28 }} />
+                      </div>
+                    )}
+                    {!isOwn && (
+                      <span
+                        className="message-sender clickable-sender"
+                        onClick={() => navigate(`/profile?uid=${msg.senderId}`)}
+                        title={`Xem trang cá nhân của ${senderDisplayName}`}
+                      >
+                        {senderDisplayName}
+                        {msg.senderRole && msg.senderRole !== 'student' && (
+                          <span className={`msg-role-tag ${ROLE_BADGE_CLASS[msg.senderRole] || ''}`}>
+                            {ROLE_LABELS[msg.senderRole] || msg.senderRole}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="message-bubble">{msg.text}</div>
+                {!isSystem && (
+                  <span className="message-time">{formatTimestamp(msg.createdAt)}</span>
+                )}
+              </div>
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {isClosed ? (
+          <div className="chat-closed-notice">
+            🔒 Phòng chat này đã được đóng. Không thể gửi tin nhắn mới.
+          </div>
+        ) : !isParticipant ? (
+          <div className="chat-closed-notice" style={{ color: 'var(--primary)' }}>
+            Bạn chưa được thêm vào phòng này.
+          </div>
+        ) : (
+          <div className="chat-input-area">
+            <textarea
+              className="chat-input"
+              rows={1}
+              placeholder="Nhập tin nhắn... (Enter để gửi)"
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyDown={onKeyDown}
+              disabled={sending}
+            />
+            <button
+              type="button"
+              className="btn-send"
+              onClick={onSend}
+              disabled={!messageText.trim() || sending}
+            >
+              ➤ Gửi
+            </button>
+          </div>
         )}
       </div>
 
-      <div className="messages-area">
-        {messages.map((msg) => {
-          const isOwn = msg.senderId === user.uid;
-          const isSystem = msg.senderRole === 'system';
-          return (
-            <div
-              key={msg.id}
-              className={`message ${isSystem ? 'system' : isOwn ? 'own' : 'other'}`}
-            >
-              {!isSystem && !isOwn && (
-                <span className="message-sender">
-                  {msg.senderName}
-                  {msg.senderRole && msg.senderRole !== 'student' && (
-                    <span className={`msg-role-tag ${ROLE_BADGE_CLASS[msg.senderRole] || ''}`}>
-                      {ROLE_LABELS[msg.senderRole] || msg.senderRole}
-                    </span>
-                  )}
-                </span>
-              )}
-              <div className="message-bubble">{msg.text}</div>
-              {!isSystem && (
-                <span className="message-time">{formatTimestamp(msg.createdAt)}</span>
-              )}
-            </div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
+      {/* Panel Danh sách Thành viên Messenger-style */}
+      {showMembersPanel && (
+        <aside className="chat-members-panel">
+          <div className="chat-members-header">
+            <h4>👥 Thành viên ({roomMembers.length})</h4>
+            <button type="button" className="btn-close-members" onClick={() => setShowMembersPanel(false)}>
+              ✕
+            </button>
+          </div>
 
-      {isClosed ? (
-        <div className="chat-closed-notice">
-          🔒 Phòng chat này đã được đóng. Không thể gửi tin nhắn mới.
-        </div>
-      ) : !isParticipant ? (
-        <div className="chat-closed-notice" style={{ color: 'var(--primary)' }}>
-          Bạn chưa được thêm vào phòng này.
-        </div>
-      ) : (
-        <div className="chat-input-area">
-          <textarea
-            className="chat-input"
-            rows={1}
-            placeholder="Nhập tin nhắn... (Enter để gửi)"
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={onKeyDown}
-            disabled={sending}
-          />
-          <button
-            className="btn-send"
-            onClick={onSend}
-            disabled={!messageText.trim() || sending}
-          >
-            ➤ Gửi
-          </button>
-        </div>
+          <div className="chat-members-search">
+            <input
+              type="search"
+              placeholder="Tìm thành viên..."
+              value={membersSearchQuery}
+              onChange={(e) => setMembersSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="chat-members-list">
+            {filteredMembers.length === 0 ? (
+              <div className="members-empty">Không tìm thấy thành viên nào</div>
+            ) : (
+              filteredMembers.map((member) => {
+                const isOnline = member.is_Online || member.isOnline;
+                const memberName = member.displayName || member.DisplayName || member.email || 'Người dùng';
+
+                return (
+                  <div key={member.id} className="member-card">
+                    <div
+                      className="member-card-main"
+                      onClick={() => navigate(`/profile?uid=${member.id}`)}
+                      title={`Xem trang cá nhân của ${memberName}`}
+                    >
+                      <div className="member-avatar-container">
+                        <Avatar src={member.avatarUrl || member.avatar || ''} alt={memberName} style={{ width: 38, height: 38 }} />
+                        <span className={`online-dot ${isOnline ? 'online' : 'offline'}`} />
+                      </div>
+                      <div className="member-info">
+                        <span className="member-name">{memberName}</span>
+                        <span className={`role-badge ${ROLE_BADGE_CLASS[member.role] || 'role-student'}`}>
+                          {ROLE_LABELS[member.role] || member.role || 'Học sinh'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn-view-profile"
+                      onClick={() => navigate(`/profile?uid=${member.id}`)}
+                      title="Xem hồ sơ"
+                    >
+                      Hồ sơ
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </aside>
       )}
-    </>
+    </div>
   );
 }
 

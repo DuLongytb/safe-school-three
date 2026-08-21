@@ -29,7 +29,8 @@ import ManageReports from './Pages/admin/ManageReports';
 import ManageChat from './Pages/admin/ManageChat';
 import './Pages/Notifications.css';
 
-const NO_CHROME_ROUTES = ['/register', '/login'];
+const NO_HEADER_ROUTES = ['/register', '/login'];
+const NO_FOOTER_ROUTES = ['/register', '/login', '/chat'];
 
 function AppShell() {
   const { pathname } = useLocation();
@@ -39,11 +40,12 @@ function AppShell() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [pathname]);
 
-  const isNoChrome = NO_CHROME_ROUTES.includes(pathname) || pathname.startsWith('/admin');
+  const isNoHeader = NO_HEADER_ROUTES.includes(pathname) || pathname.startsWith('/admin');
+  const isNoFooter = NO_FOOTER_ROUTES.includes(pathname) || pathname.startsWith('/admin');
 
   return (
     <>
-      {!isNoChrome && <Header />}
+      {!isNoHeader && <Header />}
 
       <main className="app-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Routes>
@@ -89,7 +91,7 @@ function AppShell() {
         </Routes>
       </main>
 
-      {!isNoChrome && <Footer />}
+      {!isNoFooter && <Footer />}
     </>
   );
 }
