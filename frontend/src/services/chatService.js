@@ -206,6 +206,23 @@ export async function createStudentGroup({ title, creatorId, creatorName, invite
 }
 
 /**
+ * Teacher creates a group chat with other teachers/staff.
+ * invitedStaffIds: array of teacher/expert/admin UIDs.
+ */
+export async function createTeacherGroup({ title, creatorId, creatorName, userRole = 'teacher', invitedStaffIds = [] }) {
+  return createChatRoom({
+    title,
+    userId: creatorId,
+    userName: creatorName,
+    userRole,
+    type: ROOM_TYPES.TEACHER_ONLY,
+    invitedUserIds: invitedStaffIds,
+    allowedRoles: ['teacher', 'admin', 'expert'],
+  });
+}
+
+
+/**
  * Find an existing 1-on-1 direct chat room between two users or create a new one.
  */
 export async function getOrCreateDirectChatRoom({ currentUserId, currentUserName, currentUserRole, targetUserId, targetUserName }) {
